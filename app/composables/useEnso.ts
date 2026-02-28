@@ -1,8 +1,6 @@
-import { EnsoClient } from '@ensofinance/sdk'
 import type { Strategy } from '~/config/strategies'
 
 const NATIVE_TOKEN = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' as const
-const BASE_CHAIN_ID = 8453
 
 export interface TokenBalance {
   amount: string
@@ -12,17 +10,6 @@ export interface TokenBalance {
   name: string
   symbol: string
   logoUri: string
-}
-
-let ensoClient: EnsoClient | null = null
-
-function getClient(): EnsoClient {
-  if (ensoClient) return ensoClient
-  const config = useRuntimeConfig()
-  const apiKey = config.public.ensoApiKey as string
-  if (!apiKey) throw new Error('Missing Enso API key in runtimeConfig')
-  ensoClient = new EnsoClient({ apiKey })
-  return ensoClient
 }
 
 export interface ZapQuote {
@@ -56,7 +43,6 @@ export function useEnso() {
     error.value = ''
 
     try {
-      const client = getClient()
       const vaultAsset = tokenAddress(strategy)
 
       // If tokenIn is the same as vault underlying, no zap needed
@@ -64,28 +50,16 @@ export function useEnso() {
         return null
       }
 
-      const routeData = await client.getRouteData({
-        fromAddress,
-        chainId: BASE_CHAIN_ID,
-        amountIn: [amountIn],
-        tokenIn: [tokenIn],
-        tokenOut: [strategy.vaultAddress],
-        slippage: '300', // 3%
-        routingStrategy: 'router',
-      })
-
-      return {
-        amountOut: String(routeData.amountOut),
-        gas: String(routeData.gas),
-        tx: {
-          to: routeData.tx.to,
-          data: routeData.tx.data,
-          from: routeData.tx.from,
-          value: String(routeData.tx.value),
+      return await $fetch<ZapQuote>('/api/enso/route', {
+        method: 'POST',
+        body: {
+          fromAddress,
+          amountIn,
+          tokenIn,
+          tokenOut: strategy.vaultAddress,
+          slippage: '300',
         },
-        route: routeData.route,
-        priceImpact: routeData.priceImpact ? String(routeData.priceImpact) : null,
-      }
+      })
     } catch (e: any) {
       error.value = e.message || 'Failed to get zap quote'
       console.error('[useEnso] getZapQuote error:', e)
@@ -101,12 +75,9 @@ export function useEnso() {
     fromAddress: `0x${string}`,
   ) {
     try {
-      const client = getClient()
-      return await client.getApprovalData({
-        fromAddress,
-        chainId: BASE_CHAIN_ID,
-        tokenAddress: tokenIn,
-        amount,
+      return await $fetch('/api/enso/approval', {
+        method: 'POST',
+        body: { fromAddress, tokenAddress: tokenIn, amount },
       })
     } catch (e: any) {
       console.error('[useEnso] getApprovalTx error:', e)
@@ -114,23 +85,11 @@ export function useEnso() {
     }
   }
 
-  async function getWalletBalances(address: `0x${string}`, crossChain = false): Promise<TokenBalance[]> {
+  async function getWalletBalances(address: `0x${string}`): Promise<TokenBalance[]> {
     try {
-      const client = getClient()
-      const result = await client.getBalances({
-        chainId: crossChain ? 'all' : BASE_CHAIN_ID,
-        eoaAddress: address,
-        useEoa: true,
+      return await $fetch<TokenBalance[]>('/api/enso/balances', {
+        query: { address },
       })
-      return (result as any[]).map((b: any) => ({
-        amount: String(b.amount),
-        decimals: b.decimals,
-        token: b.token,
-        price: String(b.price ?? '0'),
-        name: b.name ?? '',
-        symbol: b.symbol ?? '',
-        logoUri: b.logoUri ?? '',
-      }))
     } catch (e: any) {
       console.error('[useEnso] getWalletBalances error:', e)
       return []

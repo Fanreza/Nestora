@@ -1,113 +1,89 @@
 import type { DbUser, DbPocket, CreatePocketInput, UpdatePocketInput } from '~/types/database'
-import { useSupabase } from './useSupabase'
 
 export function useUserData() {
-  const supabase = useSupabase()
-
   // ---- User CRUD ----
 
   async function ensureUser(address: string): Promise<DbUser | null> {
-    const addr = address.toLowerCase()
-
-    const { data: existing } = await supabase
-      .from('users')
-      .select('*')
-      .eq('address', addr)
-      .maybeSingle()
-
-    if (existing) return existing as DbUser
-
-    const { data: created, error } = await supabase
-      .from('users')
-      .insert({ address: addr })
-      .select()
-      .single()
-
-    if (error) {
-      console.error('[useUserData] ensureUser error:', error.message)
+    try {
+      return await $fetch<DbUser>('/api/users/ensure', {
+        method: 'POST',
+        body: { address },
+      })
+    } catch (e: any) {
+      console.error('[useUserData] ensureUser error:', e.message)
       return null
     }
-    return created as DbUser
   }
 
   async function getUser(address: string): Promise<DbUser | null> {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('address', address.toLowerCase())
-      .single()
-
-    if (error) return null
-    return data as DbUser
+    try {
+      return await $fetch<DbUser | null>(`/api/users/${address.toLowerCase()}`)
+    } catch {
+      return null
+    }
   }
 
   async function updateDisplayName(address: string, name: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('users')
-      .update({ display_name: name })
-      .eq('address', address.toLowerCase())
-
-    if (error) {
-      console.error('[useUserData] updateDisplayName error:', error.message)
+    try {
+      await $fetch(`/api/users/${address.toLowerCase()}`, {
+        method: 'PATCH',
+        body: { display_name: name },
+      })
+      return true
+    } catch (e: any) {
+      console.error('[useUserData] updateDisplayName error:', e.message)
       return false
     }
-    return true
   }
 
   // ---- Pocket CRUD ----
 
   async function getPockets(userId: string): Promise<DbPocket[]> {
-    const { data, error } = await supabase
-      .from('pockets')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      console.error('[useUserData] getPockets error:', error.message)
+    try {
+      return await $fetch<DbPocket[]>('/api/pockets', {
+        query: { user_id: userId },
+      })
+    } catch (e: any) {
+      console.error('[useUserData] getPockets error:', e.message)
       return []
     }
-    return (data ?? []) as DbPocket[]
   }
 
   async function createPocket(input: CreatePocketInput): Promise<DbPocket | null> {
-    const { data, error } = await supabase
-      .from('pockets')
-      .insert(input)
-      .select()
-      .single()
-
-    if (error) {
-      console.error('[useUserData] createPocket error:', error.message)
+    try {
+      return await $fetch<DbPocket>('/api/pockets', {
+        method: 'POST',
+        body: input,
+      })
+    } catch (e: any) {
+      console.error('[useUserData] createPocket error:', e.message)
       return null
     }
-    return data as DbPocket
   }
 
   async function updatePocket(id: string, input: UpdatePocketInput): Promise<boolean> {
-    const { error } = await supabase
-      .from('pockets')
-      .update(input)
-      .eq('id', id)
-
-    if (error) {
-      console.error('[useUserData] updatePocket error:', error.message)
+    try {
+      await $fetch(`/api/pockets/${id}`, {
+        method: 'PATCH',
+        body: input,
+      })
+      return true
+    } catch (e: any) {
+      console.error('[useUserData] updatePocket error:', e.message)
       return false
     }
-    return true
   }
 
   async function deletePocket(id: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('pockets')
-      .delete()
-      .eq('id', id)
-
-    if (error) {
-      console.error('[useUserData] deletePocket error:', error.message)
+    try {
+      await $fetch(`/api/pockets/${id}`, {
+        method: 'DELETE',
+      })
+      return true
+    } catch (e: any) {
+      console.error('[useUserData] deletePocket error:', e.message)
       return false
     }
-    return true
   }
 
   return {

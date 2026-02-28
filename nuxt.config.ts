@@ -8,11 +8,9 @@ export default defineNuxtConfig({
   ssr: false,
 
   runtimeConfig: {
-    public: {
-      supabaseUrl: '',
-      supabaseKey: '',
-      ensoApiKey: '',
-    },
+    ensoApiKey: '',
+    supabaseUrl: '',
+    supabaseKey: '',
   },
 
   modules: ['@pinia/nuxt', 'shadcn-nuxt', '@nuxt/icon', '@nuxt/fonts'],
