@@ -4,6 +4,9 @@ export default defineEventHandler(async (event) => {
 
   const supabase = useServerSupabase()
 
+  // Delete transactions for this pocket first (defense-in-depth alongside DB CASCADE)
+  await supabase.from('transactions').delete().eq('pocket_id', id)
+
   const { error } = await supabase
     .from('pockets')
     .delete()

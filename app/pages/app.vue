@@ -57,8 +57,25 @@ const {
 const { getZapQuote, getWalletBalances, NATIVE_TOKEN } = useEnso()
 const { getTokenPrices } = useCoinGecko()
 
-watch(txState, (s) => {
+// ---- Transaction recording ----
+const { recordTransaction } = useUserData()
+const lastTxType = ref<'deposit' | 'withdraw' | 'redeem'>('deposit')
+const lastTxAmount = ref('')
+
+watch(txState, async (s) => {
   if (s === 'confirmed') {
+    // Record transaction to database
+    if (selectedPocket.value && txHash.value && selectedStrategy.value) {
+      await recordTransaction({
+        pocket_id: selectedPocket.value.id,
+        type: lastTxType.value,
+        amount: lastTxAmount.value,
+        asset_symbol: selectedStrategy.value.assetSymbol,
+        tx_hash: txHash.value,
+        timestamp: Math.floor(Date.now() / 1000),
+      })
+    }
+
     fetchBalances()
     if (address.value) profileStore.fetchAllPositions(address.value)
     profileStore.refreshPockets()
@@ -231,6 +248,9 @@ async function handleDeposit(payload: { tokenIn: `0x${string}`; amount: string; 
   const strategy = selectedStrategy.value
   if (!strategy || !address.value || !selectedPocket.value) return
 
+  lastTxType.value = 'deposit'
+  lastTxAmount.value = payload.amount
+
   if (payload.isDirect) {
     const parsed = parseUnits(payload.amount, strategy.decimals)
     if (parsed === 0n) return
@@ -248,6 +268,9 @@ async function handleDeposit(payload: { tokenIn: `0x${string}`; amount: string; 
 async function handleWithdraw(amount: string) {
   const strategy = selectedStrategy.value
   if (!strategy || !address.value || !selectedPocket.value) return
+
+  lastTxType.value = 'redeem'
+  lastTxAmount.value = amount
 
   const parsed = parseUnits(amount, strategy.decimals)
   if (parsed === 0n) return

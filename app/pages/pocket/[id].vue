@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { formatUnits } from 'viem'
+import { toPng } from 'html-to-image'
 import { STRATEGIES, STRATEGY_LIST, type StrategyKey } from '~/config/strategies'
-import { useVault } from '~/composables/useVault'
 import { useWallet } from '~/composables/useWallet'
 import { storeToRefs } from 'pinia'
 import { useProfileStore } from '~/stores/useProfileStore'
@@ -9,10 +9,10 @@ import { useProfileStore } from '~/stores/useProfileStore'
 const route = useRoute()
 const pocketId = route.params.id as string
 
-const { address, isConnected } = useWallet()
+const { isConnected } = useWallet()
 const profileStore = useProfileStore()
 const { pockets, pocketPositions, pocketProfits, loadingPositions } = storeToRefs(profileStore)
-const { getUserHistory } = useVault()
+const { getTransactions } = useUserData()
 
 const CIRCUMFERENCE = 2 * Math.PI * 42
 
@@ -52,17 +52,18 @@ interface HistoryEntry {
 }
 const history = ref<HistoryEntry[]>([])
 const loadingHistory = ref(false)
+const exportingPDF = ref(false)
 
 async function fetchHistory() {
-  if (!strategy.value || !address.value) return
+  if (!pocketId) return
   loadingHistory.value = true
   try {
-    const txs = await getUserHistory(strategy.value, address.value)
+    const txs = await getTransactions(pocketId)
     history.value = txs.map(tx => ({
       type: tx.type,
       timestamp: tx.timestamp,
-      amount: tx.assets.formatted,
-      txHash: tx.txHash,
+      amount: tx.amount,
+      txHash: tx.tx_hash,
     }))
   } catch (e) {
     console.error('[pocket detail] history fetch failed:', e)
@@ -264,6 +265,98 @@ const TX_TYPE_CONFIG: Record<string, { label: string; icon: string; color: strin
   redeem: { label: 'Redeem', icon: 'lucide:arrow-up-from-line', color: 'text-orange-500' },
 }
 
+// ---- Export functions ----
+function exportCSV() {
+  if (!pocket.value || history.value.length === 0) return
+
+  const headers = ['Date', 'Type', 'Amount', 'Asset', 'TX Hash']
+  const rows = history.value.map(tx => [
+    formatTxDate(tx.timestamp),
+    TX_TYPE_CONFIG[tx.type]?.label ?? tx.type,
+    tx.amount,
+    strategy.value?.assetSymbol ?? '',
+    tx.txHash,
+  ])
+
+  const csvContent = [headers, ...rows]
+    .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${pocket.value.name.replace(/\s+/g, '_')}_transactions.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+async function exportPDF() {
+  if (!pocket.value) return
+  exportingPDF.value = true
+  try {
+    const blob = await $fetch<Blob>('/api/transactions/export-pdf', {
+      method: 'POST',
+      body: {
+        pocket_id: pocketId,
+        pocket_name: pocket.value.name,
+        strategy_label: STRATEGY_LABELS[pocket.value.strategy_key] ?? '',
+        asset_symbol: strategy.value?.assetSymbol ?? '',
+        apy: apyFormatted.value ?? 'N/A',
+        current_value: displayUsd(usdValue.value),
+        profit: profitFormatted.value ?? '$0.00',
+      },
+      responseType: 'blob',
+    })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${pocket.value.name.replace(/\s+/g, '_')}_transactions.pdf`
+    link.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    console.error('[exportPDF] failed:', e)
+  } finally {
+    exportingPDF.value = false
+  }
+}
+
+function exportTaxCSV() {
+  if (!pocket.value || history.value.length === 0) return
+
+  const asset = strategy.value?.assetSymbol ?? ''
+  const deposits = history.value.filter(tx => tx.type === 'deposit')
+  const withdrawals = history.value.filter(tx => tx.type !== 'deposit')
+
+  const headers = ['Deposit Date', 'Withdraw Date', 'Amount', 'Yield Earned', 'Asset', 'TX Hash']
+  const rows: string[][] = []
+
+  for (const tx of deposits) {
+    rows.push([formatTxDate(tx.timestamp), '', tx.amount, '', asset, tx.txHash])
+  }
+  for (const tx of withdrawals) {
+    rows.push(['', formatTxDate(tx.timestamp), tx.amount, '', asset, tx.txHash])
+  }
+
+  // Summary row
+  const yieldStr = yieldEarned.value > 0 ? yieldEarned.value.toFixed(6) : '0'
+  const yieldUsd = yieldEarned.value > 0 ? (yieldEarned.value * assetPrice.value).toFixed(2) : '0'
+  rows.push([])
+  rows.push(['Total Yield Earned', '', '', `${yieldStr} ${asset} (~$${yieldUsd})`, asset, ''])
+
+  const csvContent = [headers, ...rows]
+    .map(row => (row as string[]).map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${pocket.value.name.replace(/\s+/g, '_')}_tax_report.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
 // ---- Smart Insight Engine ----
 const insights = computed(() => {
   const list: { icon: string; text: string }[] = []
@@ -358,6 +451,37 @@ function truncateAddr(addr: string): string {
   return addr.slice(0, 6) + '...' + addr.slice(-4)
 }
 
+// ---- Share card ----
+const showShareCard = ref(false)
+const shareCardRef = ref<HTMLElement | null>(null)
+const generatingImage = ref(false)
+
+const STRATEGY_COLORS: Record<string, string> = {
+  conservative: 'emerald',
+  balanced: 'blue',
+  aggressive: 'violet',
+}
+
+async function downloadShareCard() {
+  if (!shareCardRef.value) return
+  generatingImage.value = true
+  try {
+    const dataUrl = await toPng(shareCardRef.value, {
+      quality: 1,
+      pixelRatio: 2,
+      backgroundColor: '#09090b',
+    })
+    const link = document.createElement('a')
+    link.download = `${pocket.value?.name ?? 'pocket'}-nestora.png`
+    link.href = dataUrl
+    link.click()
+  } catch (e) {
+    console.error('[shareCard] capture failed:', e)
+  } finally {
+    generatingImage.value = false
+  }
+}
+
 // ---- Edit dialog ----
 const showEditDialog = ref(false)
 
@@ -366,8 +490,8 @@ function handleSaved() {
 }
 
 // ---- Fetch history on load ----
-watch([pocket, address], () => {
-  if (pocket.value && address.value) fetchHistory()
+watch(pocket, () => {
+  if (pocket.value) fetchHistory()
 }, { immediate: true })
 
 // Redirect if not connected
@@ -385,7 +509,11 @@ watch(isConnected, (connected) => {
           <Icon name="lucide:arrow-left" class="w-4 h-4" />
         </Button>
         <h1 class="text-sm font-semibold truncate">{{ pocket?.name || 'Pocket' }}</h1>
-        <div class="ml-auto">
+        <div class="ml-auto flex items-center gap-1">
+          <Button variant="ghost" size="sm" class="h-8" @click="showShareCard = true">
+            <Icon name="lucide:share-2" class="w-4 h-4 mr-1" />
+            Share
+          </Button>
           <Button variant="ghost" size="sm" class="h-8" @click="showEditDialog = true">
             <Icon name="lucide:pencil" class="w-4 h-4 mr-1" />
             Edit
@@ -875,15 +1003,21 @@ watch(isConnected, (connected) => {
           <div class="mb-6">
             <div class="flex items-center justify-between mb-3">
               <h3 class="text-sm font-semibold">Transaction History</h3>
-              <a
-                href="https://app.yo.xyz"
-                target="_blank"
-                rel="noopener"
-                class="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Powered by Yo
-                <Icon name="lucide:external-link" class="w-2.5 h-2.5 inline ml-0.5" />
-              </a>
+              <div v-if="history.length > 0" class="flex items-center gap-1">
+                <Button variant="ghost" size="sm" class="h-7 text-xs gap-1 no-print" @click="exportTaxCSV">
+                  <Icon name="lucide:file-spreadsheet" class="w-3 h-3" />
+                  Tax
+                </Button>
+                <Button variant="ghost" size="sm" class="h-7 text-xs gap-1 no-print" @click="exportCSV">
+                  <Icon name="lucide:download" class="w-3 h-3" />
+                  CSV
+                </Button>
+                <Button variant="ghost" size="sm" class="h-7 text-xs gap-1 no-print" :disabled="exportingPDF" @click="exportPDF">
+                  <Icon v-if="exportingPDF" name="lucide:loader-2" class="w-3 h-3 animate-spin" />
+                  <Icon v-else name="lucide:file-text" class="w-3 h-3" />
+                  PDF
+                </Button>
+              </div>
             </div>
 
             <div v-if="loadingHistory" class="space-y-2">
@@ -974,5 +1108,39 @@ watch(isConnected, (connected) => {
       :pocket="pocket"
       @saved="handleSaved"
     />
+
+    <!-- Share Card Overlay -->
+    <Teleport to="body">
+      <div
+        v-if="showShareCard"
+        class="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-6"
+        @click.self="showShareCard = false"
+      >
+        <div class="flex flex-col items-center gap-4">
+          <div ref="shareCardRef">
+            <AppPocketShareCard
+              :pocket-name="pocket?.name ?? ''"
+              :strategy-label="STRATEGY_LABELS[pocket?.strategy_key ?? ''] ?? ''"
+              :strategy-color="STRATEGY_COLORS[pocket?.strategy_key ?? ''] ?? 'emerald'"
+              :asset-symbol="strategy?.assetSymbol ?? ''"
+              :current-value-usd="displayUsd(usdValue)"
+              :profit-formatted="profitFormatted"
+              :profit-positive="profitPositive"
+              :apy-formatted="apyFormatted"
+            />
+          </div>
+
+          <div class="flex gap-3">
+            <Button @click="downloadShareCard" :disabled="generatingImage">
+              <Icon name="lucide:download" class="w-4 h-4 mr-2" />
+              {{ generatingImage ? 'Generating...' : 'Download PNG' }}
+            </Button>
+            <Button variant="outline" @click="showShareCard = false">
+              Close
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>

@@ -1,4 +1,4 @@
-import type { DbUser, DbPocket, CreatePocketInput, UpdatePocketInput } from '~/types/database'
+import type { DbUser, DbPocket, CreatePocketInput, UpdatePocketInput, DbTransaction, CreateTransactionInput } from '~/types/database'
 
 export function useUserData() {
   // ---- User CRUD ----
@@ -86,6 +86,31 @@ export function useUserData() {
     }
   }
 
+  // ---- Transaction CRUD ----
+
+  async function recordTransaction(input: CreateTransactionInput): Promise<DbTransaction | null> {
+    try {
+      return await $fetch<DbTransaction>('/api/transactions', {
+        method: 'POST',
+        body: input,
+      })
+    } catch (e: any) {
+      console.error('[useUserData] recordTransaction error:', e.message)
+      return null
+    }
+  }
+
+  async function getTransactions(pocketId: string): Promise<DbTransaction[]> {
+    try {
+      return await $fetch<DbTransaction[]>('/api/transactions', {
+        query: { pocket_id: pocketId },
+      })
+    } catch (e: any) {
+      console.error('[useUserData] getTransactions error:', e.message)
+      return []
+    }
+  }
+
   return {
     ensureUser,
     getUser,
@@ -94,5 +119,7 @@ export function useUserData() {
     createPocket,
     updatePocket,
     deletePocket,
+    recordTransaction,
+    getTransactions,
   }
 }

@@ -45,6 +45,7 @@ const quizPhase = ref<'quiz' | 'result'>('quiz')
 const quizStep = ref(0)
 const quizAnswers = ref<number[]>([])
 const recommendedStrategy = ref<StrategyKey | null>(null)
+const currentQuestion = computed(() => QUIZ_QUESTIONS[quizStep.value] ?? QUIZ_QUESTIONS[0]!)
 
 const purposeOptions = ['Emergency Fund', 'Vacation', 'Retirement', 'Education', 'Big Purchase', 'Other']
 
@@ -248,19 +249,19 @@ function handleCreate() {
 
             <div class="text-center py-2">
               <div class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
-                <Icon :name="QUIZ_QUESTIONS[quizStep].icon" class="w-6 h-6 text-primary" />
+                <Icon :name="currentQuestion.icon" class="w-6 h-6 text-primary" />
               </div>
               <h3 class="text-base font-semibold mb-1">
-                {{ QUIZ_QUESTIONS[quizStep].question }}
+                {{ currentQuestion.question }}
               </h3>
               <p class="text-xs text-muted-foreground">
-                {{ QUIZ_QUESTIONS[quizStep].subtitle }}
+                {{ currentQuestion.subtitle }}
               </p>
             </div>
 
             <div class="space-y-2 pt-2">
               <button
-                v-for="opt in QUIZ_QUESTIONS[quizStep].options"
+                v-for="opt in currentQuestion.options"
                 :key="opt.value"
                 class="w-full px-4 py-3 rounded-xl border-2 text-sm font-medium text-left transition-all"
                 :class="quizAnswers[quizStep] === opt.value

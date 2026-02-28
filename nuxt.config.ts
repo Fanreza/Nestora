@@ -51,5 +51,11 @@ export default defineNuxtConfig({
     },
   },
 
+  nitro: {
+    externals: {
+      inline: ['jspdf', 'jspdf-autotable'],
+    },
+  },
+
   compatibilityDate: '2025-01-01',
 })

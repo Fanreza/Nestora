@@ -180,3 +180,26 @@
     @apply bg-background text-foreground font-['Plus_Jakarta_Sans',sans-serif];
   }
 }
+
+@media print {
+  .no-print,
+  header,
+  nav {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 12px !important;
+  }
+
+  .dark {
+    --background: hsl(0 0% 100%);
+    --foreground: hsl(0 0% 3.9%);
+    --card: hsl(0 0% 100%);
+    --card-foreground: hsl(0 0% 3.9%);
+    --muted-foreground: hsl(0 0% 45%);
+    --border: hsl(0 0% 85%);
+  }
+}
