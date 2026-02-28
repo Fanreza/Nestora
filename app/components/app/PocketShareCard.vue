@@ -16,7 +16,7 @@ const colorMap: Record<string, { text: string; bg: string; glow: string }> = {
   violet: { text: 'text-violet-400', bg: 'bg-violet-500/20', glow: 'bg-violet-500/15' },
 }
 
-const colors = computed(() => colorMap[props.strategyColor] ?? colorMap.emerald)
+const colors = computed(() => colorMap[props.strategyColor] ?? colorMap.emerald!)
 </script>
 
 <template>
@@ -32,10 +32,13 @@ const colors = computed(() => colorMap[props.strategyColor] ?? colorMap.emerald)
 
     <!-- Header -->
     <div class="flex items-center justify-between mb-6 relative z-10">
-      <div>
-        <p class="text-xs text-zinc-500 mb-0.5">Nestora</p>
-        <p class="text-base font-semibold text-white">{{ pocketName }}</p>
-        <p class="text-xs text-zinc-400 mt-0.5">{{ strategyLabel }} Strategy</p>
+      <div class="flex items-center gap-2.5">
+        <img src="/logo.png" alt="Nestora" class="w-9 h-9 rounded-lg" />
+        <div>
+          <p class="text-xs text-zinc-500 mb-0.5">Nestora</p>
+          <p class="text-base font-semibold text-white">{{ pocketName }}</p>
+          <p class="text-xs text-zinc-400 mt-0.5">{{ strategyLabel }} Strategy</p>
+        </div>
       </div>
       <div
         class="px-2.5 py-1 rounded-full text-xs font-medium"

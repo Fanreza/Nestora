@@ -1,3 +1,14 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+// Read logo once at startup
+let logoBase64: string | null = null
+try {
+  const logoPath = resolve(process.cwd(), 'public/logo.png')
+  const logoBuffer = readFileSync(logoPath)
+  logoBase64 = logoBuffer.toString('base64')
+} catch { /* logo not found, skip */ }
+
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const { pocket_id, pocket_name, strategy_label, asset_symbol, apy, current_value, profit } = body
@@ -40,21 +51,30 @@ export default defineEventHandler(async (event) => {
 
   const doc = new jsPDF()
 
-  // Header
-  doc.setFontSize(18)
-  doc.text('Nestora', 14, 20)
-  doc.setFontSize(10)
-  doc.setTextColor(120)
-  doc.text('Transaction History', 14, 27)
+  // Header with logo
+  if (logoBase64) {
+    doc.addImage(`data:image/png;base64,${logoBase64}`, 'PNG', 14, 10, 12, 12)
+    doc.setFontSize(18)
+    doc.text('Nestora', 28, 18)
+    doc.setFontSize(10)
+    doc.setTextColor(120)
+    doc.text('Transaction History', 28, 24)
+  } else {
+    doc.setFontSize(18)
+    doc.text('Nestora', 14, 20)
+    doc.setFontSize(10)
+    doc.setTextColor(120)
+    doc.text('Transaction History', 14, 27)
+  }
 
   // Pocket info
   doc.setFontSize(12)
   doc.setTextColor(0)
-  doc.text(pocket_name || 'Pocket', 14, 40)
+  doc.text(pocket_name || 'Pocket', 14, 36)
   doc.setFontSize(9)
   doc.setTextColor(100)
-  doc.text(`${strategy_label || ''} Strategy  |  ${asset_symbol || ''}  |  APY: ${apy || 'N/A'}`, 14, 47)
-  doc.text(`Current Value: ${current_value || '$0.00'}  |  Profit: ${profit || '$0.00'}`, 14, 53)
+  doc.text(`${strategy_label || ''} Strategy  |  ${asset_symbol || ''}  |  APY: ${apy || 'N/A'}`, 14, 43)
+  doc.text(`Current Value: ${current_value || '$0.00'}  |  Profit: ${profit || '$0.00'}`, 14, 49)
 
   // Table
   const rows = txs.map((tx: any) => [
@@ -65,7 +85,7 @@ export default defineEventHandler(async (event) => {
   ])
 
   autoTable(doc, {
-    startY: 60,
+    startY: 56,
     head: [['Date', 'Type', 'Amount', 'TX Hash']],
     body: rows.length > 0 ? rows : [['No transactions yet', '', '', '']],
     styles: { fontSize: 8, cellPadding: 3 },

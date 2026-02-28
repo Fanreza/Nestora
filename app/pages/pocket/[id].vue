@@ -2,6 +2,7 @@
 import { formatUnits } from 'viem'
 import { toPng } from 'html-to-image'
 import { STRATEGIES, STRATEGY_LIST, type StrategyKey } from '~/config/strategies'
+import { useAccount } from '@wagmi/vue'
 import { useWallet } from '~/composables/useWallet'
 import { storeToRefs } from 'pinia'
 import { useProfileStore } from '~/stores/useProfileStore'
@@ -494,9 +495,10 @@ watch(pocket, () => {
   if (pocket.value) fetchHistory()
 }, { immediate: true })
 
-// Redirect if not connected
-watch(isConnected, (connected) => {
-  if (!connected) navigateTo('/app')
+// Redirect if disconnected (skip during wallet reconnection on reload)
+const { status: accountStatus } = useAccount()
+watch([isConnected, accountStatus], ([connected, status]) => {
+  if (!connected && status === 'disconnected') navigateTo('/app')
 }, { immediate: true })
 </script>
 
@@ -1109,13 +1111,13 @@ watch(isConnected, (connected) => {
       @saved="handleSaved"
     />
 
-    <!-- Share Card Overlay -->
-    <Teleport to="body">
-      <div
-        v-if="showShareCard"
-        class="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-6"
-        @click.self="showShareCard = false"
-      >
+    <!-- Share Card Dialog -->
+    <Dialog v-model:open="showShareCard">
+      <DialogContent class="sm:max-w-fit bg-transparent border-none shadow-none p-0 [&>button]:hidden">
+        <DialogHeader class="sr-only">
+          <DialogTitle>Share Pocket</DialogTitle>
+          <DialogDescription>Download your pocket performance card</DialogDescription>
+        </DialogHeader>
         <div class="flex flex-col items-center gap-4">
           <div ref="shareCardRef">
             <AppPocketShareCard
@@ -1135,12 +1137,12 @@ watch(isConnected, (connected) => {
               <Icon name="lucide:download" class="w-4 h-4 mr-2" />
               {{ generatingImage ? 'Generating...' : 'Download PNG' }}
             </Button>
-            <Button variant="outline" @click="showShareCard = false">
-              Close
-            </Button>
+            <DialogClose as-child>
+              <Button variant="outline">Close</Button>
+            </DialogClose>
           </div>
         </div>
-      </div>
-    </Teleport>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
