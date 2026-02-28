@@ -44,7 +44,7 @@ const profileDisplayName = computed(() =>
 const pocketCount = computed(() => pockets.value.length)
 
 // ---- Balances ----
-const { ethBalance, fetchBalances } = useBalances()
+const { ethBalance, fetchBalances, loading: loadingBalances } = useBalances()
 
 // ---- Vault ----
 const {
@@ -136,6 +136,12 @@ async function handleCreatePocket(payload: {
 const showDeleteConfirm = ref(false)
 const pocketToDelete = ref<DbPocket | null>(null)
 const deletingPocket = ref(false)
+
+const pocketHasFunds = computed(() => {
+  if (!pocketToDelete.value) return false
+  const pos = pocketPositions.value[pocketToDelete.value.id]
+  return pos && pos.shares > 0n
+})
 
 function requestDeletePocket(pocket: DbPocket) {
   pocketToDelete.value = pocket
@@ -266,7 +272,7 @@ function handleChangeMode(mode: 'deposit' | 'withdraw') {
 }
 
 // ---- Helpers ----
-const lowGas = computed(() => ethBalance.value < parseUnits('0.0005', 18))
+const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parseUnits('0.0005', 18))
 </script>
 
 <template>
@@ -439,14 +445,21 @@ const lowGas = computed(() => ethBalance.value < parseUnits('0.0005', 18))
     <AlertDialog v-model:open="showDeleteConfirm">
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete pocket?</AlertDialogTitle>
+          <AlertDialogTitle>{{ pocketHasFunds ? 'Can\'t delete pocket' : 'Delete pocket?' }}</AlertDialogTitle>
           <AlertDialogDescription>
-            Are you sure you want to delete <span class="font-medium text-foreground">{{ pocketToDelete?.name }}</span>? This action cannot be undone.
+            <template v-if="pocketHasFunds">
+              <span class="font-medium text-foreground">{{ pocketToDelete?.name }}</span> still has funds. Use the Cash Out button to withdraw first, then delete the pocket. You can also withdraw directly via
+              <a href="https://app.yo.xyz" target="_blank" rel="noopener" class="text-primary underline underline-offset-2 hover:text-primary/80">app.yo.xyz</a>.
+            </template>
+            <template v-else>
+              Are you sure you want to delete <span class="font-medium text-foreground">{{ pocketToDelete?.name }}</span>? This action cannot be undone.
+            </template>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel :disabled="deletingPocket">Cancel</AlertDialogCancel>
+          <AlertDialogCancel :disabled="deletingPocket">{{ pocketHasFunds ? 'OK' : 'Cancel' }}</AlertDialogCancel>
           <AlertDialogAction
+            v-if="!pocketHasFunds"
             class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             :disabled="deletingPocket"
             @click.prevent="confirmDeletePocket"

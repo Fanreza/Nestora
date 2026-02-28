@@ -5,6 +5,17 @@ import type { Strategy } from '~/config/strategies'
 import { useEnso } from './useEnso'
 import { createYoClient, YO_GATEWAY_ADDRESS } from '@yo-protocol/core'
 
+async function getLowGasFees() {
+  const client = getPublicClient(wagmiConfig)
+  const block = await client!.getBlock({ blockTag: 'latest' })
+  const baseFee = block.baseFeePerGas ?? 0n
+  // Use base fee + 1 wei tip — the absolute minimum to get included
+  return {
+    maxFeePerGas: baseFee + 1n,
+    maxPriorityFeePerGas: 1n,
+  }
+}
+
 export interface VaultSnapshotResult {
   yield: {
     '1d': string | null
@@ -108,11 +119,13 @@ export function useVault() {
         amount,
         recipient: address.value,
       })
+      const gasFees = await getLowGasFees()
 
       const hash = await sendTransaction(wagmiConfig, {
         to: preparedTx.to as `0x${string}`,
         data: preparedTx.data as `0x${string}`,
         value: preparedTx.value,
+        ...gasFees,
       })
 
       txHash.value = hash
@@ -159,11 +172,13 @@ export function useVault() {
         shares,
         recipient: address.value,
       })
+      const gasFees = await getLowGasFees()
 
       const hash = await sendTransaction(wagmiConfig, {
         to: preparedTx.to as `0x${string}`,
         data: preparedTx.data as `0x${string}`,
         value: preparedTx.value,
+        ...gasFees,
       })
 
       txHash.value = hash
@@ -244,10 +259,12 @@ export function useVault() {
         txState.value = 'approving'
         const approval = await getApprovalTx(tokenIn, amount, address.value)
         if (approval?.tx) {
+          const approveGas = await getLowGasFees()
           const approveHash = await sendTransaction(wagmiConfig, {
             to: approval.tx.to as `0x${string}`,
             data: approval.tx.data as `0x${string}`,
             value: BigInt(approval.tx.value || '0'),
+            ...approveGas,
           })
           await waitForTransactionReceipt(wagmiConfig, { hash: approveHash })
         }
@@ -255,10 +272,12 @@ export function useVault() {
 
       // Execute the zap transaction
       txState.value = 'awaiting_signature'
+      const zapGas = await getLowGasFees()
       const hash = await sendTransaction(wagmiConfig, {
         to: quote.tx.to as `0x${string}`,
         data: quote.tx.data as `0x${string}`,
         value: BigInt(quote.tx.value || '0'),
+        ...zapGas,
       })
 
       txHash.value = hash

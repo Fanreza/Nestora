@@ -86,10 +86,17 @@ const currentValueFormatted = computed(() => {
   return assetValue.value.toLocaleString('en-US', { maximumFractionDigits: 6 })
 })
 
-const progress = computed(() => {
+const progressRaw = computed(() => {
   if (!pocket.value?.target_amount || pocket.value.target_amount === 0) return 0
   if (usdValue.value === 0) return 0
-  return Math.min(Math.round((usdValue.value / pocket.value.target_amount) * 100), 100)
+  return Math.min((usdValue.value / pocket.value.target_amount) * 100, 100)
+})
+
+const progress = computed(() => {
+  const v = progressRaw.value
+  if (v === 0) return '0'
+  if (v >= 1) return Math.round(v).toString()
+  return v.toFixed(1)
 })
 
 const apyFormatted = computed(() => {
@@ -540,7 +547,7 @@ watch(isConnected, (connected) => {
                         'stroke-violet-500': pocket.strategy_key === 'aggressive',
                       }"
                       :stroke-dasharray="CIRCUMFERENCE"
-                      :stroke-dashoffset="CIRCUMFERENCE - (CIRCUMFERENCE * progress / 100)"
+                      :stroke-dashoffset="CIRCUMFERENCE - (CIRCUMFERENCE * progressRaw / 100)"
                       transform="rotate(-90 50 50)"
                     />
                   </svg>
@@ -584,7 +591,18 @@ watch(isConnected, (connected) => {
 
           <!-- Transaction history -->
           <div class="mb-6">
-            <h3 class="text-sm font-semibold mb-3">Transaction History</h3>
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-semibold">Transaction History</h3>
+              <a
+                href="https://app.yo.xyz"
+                target="_blank"
+                rel="noopener"
+                class="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Powered by Yo
+                <Icon name="lucide:external-link" class="w-2.5 h-2.5 inline ml-0.5" />
+              </a>
+            </div>
 
             <div v-if="loadingHistory" class="space-y-2">
               <div v-for="i in 3" :key="i" class="flex items-center gap-3 p-4">

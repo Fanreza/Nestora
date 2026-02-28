@@ -47,10 +47,17 @@ const currentValueFormatted = computed(() => {
 
 const usdValue = computed(() => assetValue.value * props.assetPrice)
 
-const progress = computed(() => {
+const progressRaw = computed(() => {
   if (!props.pocket.target_amount || props.pocket.target_amount === 0) return 0
   if (usdValue.value === 0) return 0
-  return Math.min(Math.round((usdValue.value / props.pocket.target_amount) * 100), 100)
+  return Math.min((usdValue.value / props.pocket.target_amount) * 100, 100)
+})
+
+const progress = computed(() => {
+  const v = progressRaw.value
+  if (v === 0) return '0'
+  if (v >= 1) return Math.round(v).toString()
+  return v.toFixed(1)
 })
 
 const apyFormatted = computed(() => {
@@ -188,7 +195,7 @@ function displayUsd(value: number): string {
               'bg-blue-500': pocket.strategy_key === 'balanced',
               'bg-violet-500': pocket.strategy_key === 'aggressive',
             }"
-            :style="{ width: `${progress}%` }"
+            :style="{ width: `${progressRaw}%` }"
           />
         </div>
       </div>

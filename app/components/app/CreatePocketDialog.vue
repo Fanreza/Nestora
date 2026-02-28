@@ -25,7 +25,17 @@ defineProps<{
 const step = ref(1)
 const name = ref('')
 const purpose = ref('')
-const target = ref<number | undefined>()
+const targetDisplay = ref('')
+const target = computed(() => {
+  const num = Number(targetDisplay.value.replace(/,/g, ''))
+  return num > 0 ? num : undefined
+})
+
+function onTargetInput(v: string) {
+  const raw = v.replace(/[^0-9]/g, '')
+  if (!raw) { targetDisplay.value = ''; return }
+  targetDisplay.value = Number(raw).toLocaleString('en-US')
+}
 const timeline = ref<DateValue | undefined>()
 const showDatePicker = ref(false)
 const risk = ref<StrategyKey | null>(null)
@@ -51,7 +61,7 @@ function resetForm() {
   step.value = 1
   name.value = ''
   purpose.value = ''
-  target.value = undefined
+  targetDisplay.value = ''
   timeline.value = undefined
   risk.value = null
   quizPhase.value = 'quiz'
@@ -169,13 +179,12 @@ function handleCreate() {
             <div class="relative">
               <span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-base font-medium">$</span>
               <Input
-                :model-value="target ?? ''"
-                type="number"
+                :model-value="targetDisplay"
+                type="text"
                 inputmode="numeric"
-                min="0"
                 placeholder="1,000"
                 class="h-12 pl-8 text-base"
-                @update:model-value="(v: any) => target = v ? Number(v) : undefined"
+                @update:model-value="(v: any) => onTargetInput(String(v))"
               />
             </div>
             <p class="text-[11px] text-muted-foreground mt-1">Optional. Helps you track progress.</p>
