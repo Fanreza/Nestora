@@ -1,4 +1,5 @@
-# Nestora
+# <img width="204" height="204" alt="logo" src="https://github.com/user-attachments/assets/26173df0-142e-4369-8321-9bfa9f206f3f" />
+Nestora
 
 > _Named after Nestor, the Greek sage whose name means "the one who returns" — Nestora helps your wealth return to you, grown._
 
