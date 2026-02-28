@@ -1,0 +1,249 @@
+<script setup lang="ts">
+import { today, getLocalTimeZone } from '@internationalized/date'
+import type { DateValue } from '@internationalized/date'
+import { STRATEGY_LIST, type StrategyKey } from '~/config/strategies'
+import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover'
+import { Calendar } from '~/components/ui/calendar'
+
+const open = defineModel<boolean>('open', { required: true })
+
+const emit = defineEmits<{
+  create: [payload: {
+    name: string
+    purpose?: string
+    target_amount?: number
+    timeline?: string
+    strategy_key: StrategyKey
+  }]
+}>()
+
+defineProps<{
+  creating: boolean
+}>()
+
+const step = ref(1)
+const name = ref('')
+const purpose = ref('')
+const target = ref<number | undefined>()
+const timeline = ref<DateValue | undefined>()
+const showDatePicker = ref(false)
+const risk = ref<StrategyKey | null>(null)
+
+const purposeOptions = ['Emergency Fund', 'Vacation', 'Retirement', 'Education', 'Big Purchase', 'Other']
+
+const RISK_LABELS: Record<string, { label: string; icon: string; color: string }> = {
+  conservative: { label: 'Low risk', icon: 'lucide:shield', color: 'text-emerald-400' },
+  balanced: { label: 'Medium risk', icon: 'lucide:scale', color: 'text-blue-400' },
+  aggressive: { label: 'High risk', icon: 'lucide:zap', color: 'text-violet-400' },
+}
+
+const canProceedStep1 = computed(() => name.value.trim().length > 0)
+const canCreate = computed(() => risk.value !== null)
+
+function resetForm() {
+  step.value = 1
+  name.value = ''
+  purpose.value = ''
+  target.value = undefined
+  timeline.value = undefined
+  risk.value = null
+}
+
+watch(open, (v) => {
+  if (v) resetForm()
+})
+
+function handleCreate() {
+  if (!risk.value) return
+  emit('create', {
+    name: name.value.trim(),
+    purpose: purpose.value || undefined,
+    target_amount: target.value || undefined,
+    timeline: timeline.value ? timeline.value.toString() : undefined,
+    strategy_key: risk.value,
+  })
+}
+</script>
+
+<template>
+  <Dialog v-model:open="open">
+    <DialogContent class="sm:max-w-md p-0 gap-0 overflow-hidden">
+      <div class="px-6 pt-6 pb-4">
+        <DialogHeader>
+          <DialogTitle>Create a Pocket</DialogTitle>
+          <DialogDescription>
+            <template v-if="step === 1">Give your savings pocket a name.</template>
+            <template v-else-if="step === 2">Set a target and timeline (optional).</template>
+            <template v-else>Choose how your money grows.</template>
+          </DialogDescription>
+        </DialogHeader>
+
+        <!-- Step indicator -->
+        <div class="flex items-center gap-2 mt-4">
+          <div
+            v-for="s in 3"
+            :key="s"
+            class="flex-1 h-1 rounded-full transition-colors"
+            :class="s <= step ? 'bg-green-500' : 'bg-muted'"
+          />
+        </div>
+      </div>
+
+      <div class="px-6 pb-6">
+        <!-- Step 1: Name + Purpose -->
+        <div v-if="step === 1" class="space-y-4">
+          <div>
+            <label class="text-sm font-medium mb-1.5 block">Pocket name</label>
+            <Input
+              v-model="name"
+              placeholder="e.g. Emergency Fund"
+              class="h-12"
+            />
+          </div>
+          <div>
+            <label class="text-sm font-medium mb-1.5 block">Purpose</label>
+            <div class="grid grid-cols-3 gap-2">
+              <button
+                v-for="opt in purposeOptions"
+                :key="opt"
+                class="px-3 py-2 text-xs rounded-lg border transition-all"
+                :class="purpose === opt
+                  ? 'border-green-500 bg-green-500/10 text-green-600 font-medium'
+                  : 'border-border hover:border-green-500/30 text-muted-foreground'"
+                @click="purpose = purpose === opt ? '' : opt"
+              >
+                {{ opt }}
+              </button>
+            </div>
+          </div>
+          <Button
+            class="w-full bg-green-500 text-white hover:bg-green-600"
+            :disabled="!canProceedStep1"
+            @click="step++"
+          >
+            Next
+            <Icon name="lucide:arrow-right" class="w-4 h-4 ml-1.5" />
+          </Button>
+        </div>
+
+        <!-- Step 2: Target + Timeline -->
+        <div v-else-if="step === 2" class="space-y-4">
+          <div>
+            <label class="text-sm font-medium mb-1.5 block">Target amount (USD)</label>
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-base font-medium">$</span>
+              <Input
+                :model-value="target ?? ''"
+                type="number"
+                inputmode="numeric"
+                min="0"
+                placeholder="1,000"
+                class="h-12 pl-8 text-base"
+                @update:model-value="(v: any) => target = v ? Number(v) : undefined"
+              />
+            </div>
+            <p class="text-[11px] text-muted-foreground mt-1">Optional. Helps you track progress.</p>
+          </div>
+          <div>
+            <label class="text-sm font-medium mb-1.5 block">Timeline</label>
+            <Popover v-model:open="showDatePicker">
+              <PopoverTrigger as-child>
+                <Button
+                  variant="outline"
+                  class="w-full h-12 justify-start text-left font-normal"
+                  :class="{ 'text-muted-foreground': !timeline }"
+                >
+                  <Icon name="lucide:calendar" class="w-4 h-4 mr-2" />
+                  <template v-if="timeline">
+                    {{ timeline.toString() }}
+                  </template>
+                  <template v-else>
+                    Pick a date
+                  </template>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent class="w-auto p-0" align="start">
+                <Calendar
+                  v-model="timeline"
+                  :min-value="today(getLocalTimeZone())"
+                  initial-focus
+                  @update:model-value="showDatePicker = false"
+                />
+              </PopoverContent>
+            </Popover>
+            <p class="text-[11px] text-muted-foreground mt-1">Optional. When do you need this money?</p>
+          </div>
+          <div class="flex gap-3">
+            <Button variant="outline" class="flex-1" @click="step--">
+              <Icon name="lucide:arrow-left" class="w-4 h-4 mr-1.5" />
+              Back
+            </Button>
+            <Button
+              class="flex-1 bg-green-500 text-white hover:bg-green-600"
+              @click="step++"
+            >
+              Next
+              <Icon name="lucide:arrow-right" class="w-4 h-4 ml-1.5" />
+            </Button>
+          </div>
+        </div>
+
+        <!-- Step 3: Risk level -->
+        <div v-else class="space-y-3">
+          <div
+            v-for="s in STRATEGY_LIST"
+            :key="s.key"
+            class="p-4 rounded-xl border-2 cursor-pointer transition-all"
+            :class="risk === s.key
+              ? 'border-green-500 bg-green-500/5'
+              : 'border-border hover:border-green-500/30'"
+            @click="risk = s.key"
+          >
+            <div class="flex items-center gap-3">
+              <div
+                class="w-10 h-10 rounded-xl flex items-center justify-center"
+                :class="{
+                  'bg-emerald-500/10': s.key === 'conservative',
+                  'bg-blue-500/10': s.key === 'balanced',
+                  'bg-violet-500/10': s.key === 'aggressive',
+                }"
+              >
+                <Icon :name="s.icon" class="w-5 h-5" :class="RISK_LABELS[s.key]?.color" />
+              </div>
+              <div class="flex-1">
+                <p class="font-semibold text-sm">{{ s.label }}</p>
+                <p class="text-xs text-muted-foreground">{{ s.subtitle }}</p>
+              </div>
+              <Badge
+                variant="outline"
+                class="text-xs"
+                :class="{
+                  'border-emerald-500/30 text-emerald-500': s.risk === 'low',
+                  'border-amber-500/30 text-amber-500': s.risk === 'medium',
+                  'border-red-500/30 text-red-500': s.risk === 'high',
+                }"
+              >
+                {{ RISK_LABELS[s.key]?.label }}
+              </Badge>
+            </div>
+          </div>
+
+          <div class="flex gap-3 pt-2">
+            <Button variant="outline" class="flex-1" @click="step--">
+              <Icon name="lucide:arrow-left" class="w-4 h-4 mr-1.5" />
+              Back
+            </Button>
+            <Button
+              class="flex-1 bg-green-500 text-white hover:bg-green-600"
+              :disabled="!canCreate || creating"
+              @click="handleCreate"
+            >
+              <Icon v-if="creating" name="lucide:loader-2" class="w-4 h-4 mr-1.5 animate-spin" />
+              Create Pocket
+            </Button>
+          </div>
+        </div>
+      </div>
+    </DialogContent>
+  </Dialog>
+</template>
