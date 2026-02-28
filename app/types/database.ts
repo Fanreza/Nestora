@@ -34,21 +34,3 @@ export interface UpdatePocketInput {
   target_amount?: number
   strategy_key?: string
 }
-
-export interface DbTransaction {
-  id: string
-  pocket_id: string
-  type: 'deposit' | 'withdraw'
-  amount: string
-  asset_symbol: string
-  tx_hash: string
-  created_at: string
-}
-
-export interface CreateTransactionInput {
-  pocket_id: string
-  type: 'deposit' | 'withdraw'
-  amount: string
-  asset_symbol: string
-  tx_hash: string
-}

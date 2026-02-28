@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { today, getLocalTimeZone } from '@internationalized/date'
 import type { DateValue } from '@internationalized/date'
-import { STRATEGY_LIST, type StrategyKey } from '~/config/strategies'
+import { STRATEGIES, STRATEGY_LIST, type StrategyKey } from '~/config/strategies'
+import { QUIZ_QUESTIONS, RECOMMENDATION_REASONS, computeRecommendation } from '~/config/quizScoring'
 import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover'
 import { Calendar } from '~/components/ui/calendar'
 
@@ -29,6 +30,12 @@ const timeline = ref<DateValue | undefined>()
 const showDatePicker = ref(false)
 const risk = ref<StrategyKey | null>(null)
 
+// Quiz state
+const quizPhase = ref<'quiz' | 'result'>('quiz')
+const quizStep = ref(0)
+const quizAnswers = ref<number[]>([])
+const recommendedStrategy = ref<StrategyKey | null>(null)
+
 const purposeOptions = ['Emergency Fund', 'Vacation', 'Retirement', 'Education', 'Big Purchase', 'Other']
 
 const RISK_LABELS: Record<string, { label: string; icon: string; color: string }> = {
@@ -47,6 +54,35 @@ function resetForm() {
   target.value = undefined
   timeline.value = undefined
   risk.value = null
+  quizPhase.value = 'quiz'
+  quizStep.value = 0
+  quizAnswers.value = []
+  recommendedStrategy.value = null
+}
+
+function selectQuizAnswer(value: number) {
+  quizAnswers.value[quizStep.value] = value
+  if (quizStep.value < QUIZ_QUESTIONS.length - 1) {
+    setTimeout(() => { quizStep.value++ }, 200)
+  } else {
+    setTimeout(() => {
+      const result = computeRecommendation(quizAnswers.value)
+      recommendedStrategy.value = result
+      risk.value = result
+      quizPhase.value = 'result'
+    }, 200)
+  }
+}
+
+function quizBack() {
+  if (quizPhase.value === 'result') {
+    quizPhase.value = 'quiz'
+    quizStep.value = QUIZ_QUESTIONS.length - 1
+  } else if (quizStep.value > 0) {
+    quizStep.value--
+  } else {
+    step.value = 2
+  }
 }
 
 watch(open, (v) => {
@@ -74,7 +110,7 @@ function handleCreate() {
           <DialogDescription>
             <template v-if="step === 1">Give your savings pocket a name.</template>
             <template v-else-if="step === 2">Set a target and timeline (optional).</template>
-            <template v-else>Choose how your money grows.</template>
+            <template v-else>{{ quizPhase === 'quiz' ? 'A few quick questions to find your best fit.' : 'Here\'s what we recommend.' }}</template>
           </DialogDescription>
         </DialogHeader>
 
@@ -84,7 +120,7 @@ function handleCreate() {
             v-for="s in 3"
             :key="s"
             class="flex-1 h-1 rounded-full transition-colors"
-            :class="s <= step ? 'bg-green-500' : 'bg-muted'"
+            :class="s <= step ? 'bg-primary' : 'bg-muted'"
           />
         </div>
       </div>
@@ -108,8 +144,8 @@ function handleCreate() {
                 :key="opt"
                 class="px-3 py-2 text-xs rounded-lg border transition-all"
                 :class="purpose === opt
-                  ? 'border-green-500 bg-green-500/10 text-green-600 font-medium'
-                  : 'border-border hover:border-green-500/30 text-muted-foreground'"
+                  ? 'border-primary bg-primary/10 text-primary font-medium'
+                  : 'border-border hover:border-primary/30 text-muted-foreground'"
                 @click="purpose = purpose === opt ? '' : opt"
               >
                 {{ opt }}
@@ -117,7 +153,7 @@ function handleCreate() {
             </div>
           </div>
           <Button
-            class="w-full bg-green-500 text-white hover:bg-green-600"
+            class="w-full bg-primary text-primary-foreground hover:bg-primary/90"
             :disabled="!canProceedStep1"
             @click="step++"
           >
@@ -179,7 +215,7 @@ function handleCreate() {
               Back
             </Button>
             <Button
-              class="flex-1 bg-green-500 text-white hover:bg-green-600"
+              class="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
               @click="step++"
             >
               Next
@@ -188,60 +224,163 @@ function handleCreate() {
           </div>
         </div>
 
-        <!-- Step 3: Risk level -->
+        <!-- Step 3: Quiz + Recommendation -->
         <div v-else class="space-y-3">
-          <div
-            v-for="s in STRATEGY_LIST"
-            :key="s.key"
-            class="p-4 rounded-xl border-2 cursor-pointer transition-all"
-            :class="risk === s.key
-              ? 'border-green-500 bg-green-500/5'
-              : 'border-border hover:border-green-500/30'"
-            @click="risk = s.key"
-          >
-            <div class="flex items-center gap-3">
+          <!-- Phase: Quiz questions -->
+          <template v-if="quizPhase === 'quiz'">
+            <div class="flex items-center justify-center gap-1.5 mb-2">
               <div
-                class="w-10 h-10 rounded-xl flex items-center justify-center"
-                :class="{
-                  'bg-emerald-500/10': s.key === 'conservative',
-                  'bg-blue-500/10': s.key === 'balanced',
-                  'bg-violet-500/10': s.key === 'aggressive',
-                }"
-              >
-                <Icon :name="s.icon" class="w-5 h-5" :class="RISK_LABELS[s.key]?.color" />
-              </div>
-              <div class="flex-1">
-                <p class="font-semibold text-sm">{{ s.label }}</p>
-                <p class="text-xs text-muted-foreground">{{ s.subtitle }}</p>
-              </div>
-              <Badge
-                variant="outline"
-                class="text-xs"
-                :class="{
-                  'border-emerald-500/30 text-emerald-500': s.risk === 'low',
-                  'border-amber-500/30 text-amber-500': s.risk === 'medium',
-                  'border-red-500/30 text-red-500': s.risk === 'high',
-                }"
-              >
-                {{ RISK_LABELS[s.key]?.label }}
-              </Badge>
+                v-for="(_, qi) in QUIZ_QUESTIONS"
+                :key="qi"
+                class="w-2 h-2 rounded-full transition-colors"
+                :class="qi <= quizStep ? 'bg-primary' : 'bg-muted'"
+              />
             </div>
-          </div>
 
-          <div class="flex gap-3 pt-2">
-            <Button variant="outline" class="flex-1" @click="step--">
-              <Icon name="lucide:arrow-left" class="w-4 h-4 mr-1.5" />
-              Back
-            </Button>
-            <Button
-              class="flex-1 bg-green-500 text-white hover:bg-green-600"
-              :disabled="!canCreate || creating"
-              @click="handleCreate"
-            >
-              <Icon v-if="creating" name="lucide:loader-2" class="w-4 h-4 mr-1.5 animate-spin" />
-              Create Pocket
-            </Button>
-          </div>
+            <div class="text-center py-2">
+              <div class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                <Icon :name="QUIZ_QUESTIONS[quizStep].icon" class="w-6 h-6 text-primary" />
+              </div>
+              <h3 class="text-base font-semibold mb-1">
+                {{ QUIZ_QUESTIONS[quizStep].question }}
+              </h3>
+              <p class="text-xs text-muted-foreground">
+                {{ QUIZ_QUESTIONS[quizStep].subtitle }}
+              </p>
+            </div>
+
+            <div class="space-y-2 pt-2">
+              <button
+                v-for="opt in QUIZ_QUESTIONS[quizStep].options"
+                :key="opt.value"
+                class="w-full px-4 py-3 rounded-xl border-2 text-sm font-medium text-left transition-all"
+                :class="quizAnswers[quizStep] === opt.value
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border hover:border-primary/30'"
+                @click="selectQuizAnswer(opt.value)"
+              >
+                {{ opt.label }}
+              </button>
+            </div>
+
+            <div class="pt-2">
+              <Button variant="outline" class="w-full" @click="quizBack">
+                <Icon name="lucide:arrow-left" class="w-4 h-4 mr-1.5" />
+                Back
+              </Button>
+            </div>
+          </template>
+
+          <!-- Phase: Recommendation result -->
+          <template v-else>
+            <div class="mb-3">
+              <p class="text-xs font-medium text-primary mb-2 flex items-center gap-1.5">
+                <Icon name="lucide:sparkles" class="w-3.5 h-3.5" />
+                Recommended for you
+              </p>
+              <div
+                v-if="recommendedStrategy"
+                class="p-4 rounded-xl border-2 cursor-pointer transition-all"
+                :class="risk === recommendedStrategy
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:border-primary/30'"
+                @click="risk = recommendedStrategy"
+              >
+                <div class="flex items-center gap-3">
+                  <div
+                    class="w-10 h-10 rounded-xl flex items-center justify-center"
+                    :class="{
+                      'bg-emerald-500/10': recommendedStrategy === 'conservative',
+                      'bg-blue-500/10': recommendedStrategy === 'balanced',
+                      'bg-violet-500/10': recommendedStrategy === 'aggressive',
+                    }"
+                  >
+                    <Icon
+                      :name="STRATEGIES[recommendedStrategy].icon"
+                      class="w-5 h-5"
+                      :class="RISK_LABELS[recommendedStrategy]?.color"
+                    />
+                  </div>
+                  <div class="flex-1">
+                    <p class="font-semibold text-sm">{{ STRATEGIES[recommendedStrategy].label }}</p>
+                    <p class="text-xs text-muted-foreground">{{ STRATEGIES[recommendedStrategy].subtitle }}</p>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    class="text-xs"
+                    :class="{
+                      'border-emerald-500/30 text-emerald-500': STRATEGIES[recommendedStrategy].risk === 'low',
+                      'border-amber-500/30 text-amber-500': STRATEGIES[recommendedStrategy].risk === 'medium',
+                      'border-red-500/30 text-red-500': STRATEGIES[recommendedStrategy].risk === 'high',
+                    }"
+                  >
+                    {{ RISK_LABELS[recommendedStrategy]?.label }}
+                  </Badge>
+                </div>
+                <p class="text-xs text-muted-foreground mt-3 leading-relaxed">
+                  {{ RECOMMENDATION_REASONS[recommendedStrategy] }}
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <p class="text-xs text-muted-foreground mb-2">Or choose a different strategy</p>
+              <div class="space-y-2">
+                <div
+                  v-for="s in STRATEGY_LIST.filter(s => s.key !== recommendedStrategy)"
+                  :key="s.key"
+                  class="p-3 rounded-xl border-2 cursor-pointer transition-all"
+                  :class="risk === s.key
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-primary/30'"
+                  @click="risk = s.key"
+                >
+                  <div class="flex items-center gap-3">
+                    <div
+                      class="w-8 h-8 rounded-lg flex items-center justify-center"
+                      :class="{
+                        'bg-emerald-500/10': s.key === 'conservative',
+                        'bg-blue-500/10': s.key === 'balanced',
+                        'bg-violet-500/10': s.key === 'aggressive',
+                      }"
+                    >
+                      <Icon :name="s.icon" class="w-4 h-4" :class="RISK_LABELS[s.key]?.color" />
+                    </div>
+                    <div class="flex-1">
+                      <p class="font-medium text-sm">{{ s.label }}</p>
+                      <p class="text-xs text-muted-foreground">{{ s.subtitle }}</p>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      class="text-xs"
+                      :class="{
+                        'border-emerald-500/30 text-emerald-500': s.risk === 'low',
+                        'border-amber-500/30 text-amber-500': s.risk === 'medium',
+                        'border-red-500/30 text-red-500': s.risk === 'high',
+                      }"
+                    >
+                      {{ RISK_LABELS[s.key]?.label }}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+              <Button variant="outline" class="flex-1" @click="quizBack">
+                <Icon name="lucide:arrow-left" class="w-4 h-4 mr-1.5" />
+                Back
+              </Button>
+              <Button
+                class="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
+                :disabled="!canCreate || creating"
+                @click="handleCreate"
+              >
+                <Icon v-if="creating" name="lucide:loader-2" class="w-4 h-4 mr-1.5 animate-spin" />
+                Create Pocket
+              </Button>
+            </div>
+          </template>
         </div>
       </div>
     </DialogContent>

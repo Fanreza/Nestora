@@ -85,7 +85,7 @@ async function handleSave() {
           Cancel
         </Button>
         <Button
-          class="bg-green-500 text-white hover:bg-green-600"
+          class="bg-primary text-primary-foreground hover:bg-primary/90"
           :disabled="!name.trim() || saving"
           @click="handleSave"
         >

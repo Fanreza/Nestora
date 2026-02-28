@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { parseUnits, formatUnits } from 'viem'
-import { STRATEGIES, STRATEGY_LIST, type StrategyKey } from '~/config/strategies'
+import { parseUnits } from 'viem'
+import { STRATEGIES, type StrategyKey } from '~/config/strategies'
 import type { DbPocket } from '~/types/database'
 import { useWallet } from '~/composables/useWallet'
 import { useBalances } from '~/composables/useBalances'
 import { useVault } from '~/composables/useVault'
 import { useEnso, type TokenBalance } from '~/composables/useEnso'
-import { useUserData } from '~/composables/useUserData'
 import { useCoinGecko } from '~/composables/useCoinGecko'
 import { storeToRefs } from 'pinia'
 import { useProfileStore } from '~/stores/useProfileStore'
@@ -30,12 +29,19 @@ async function handleSmartAccount() {
   await connectSmartAccount()
 }
 
-// ---- Profile Store ----
+// ---- Profile Store (all position/price/APY data lives here) ----
 const profileStore = useProfileStore()
-const { currentUser, pockets, loading: loadingPockets } = storeToRefs(profileStore)
+const {
+  currentUser, pockets, loading: loadingPockets,
+  pocketPositions, pocketProfits, loadingPositions,
+  totalPortfolioFormatted,
+} = storeToRefs(profileStore)
+
 const profileDisplayName = computed(() =>
   address.value ? profileStore.displayName(address.value) : '',
 )
+
+const pocketCount = computed(() => pockets.value.length)
 
 // ---- Balances ----
 const { ethBalance, fetchBalances } = useBalances()
@@ -44,143 +50,17 @@ const { ethBalance, fetchBalances } = useBalances()
 const {
   txState, txHash, txError,
   deposit, redeem, zapDeposit,
-  getShareBalance, getShareValue,
-  getVaultSnapshot, getUserPerformance,
   reset,
 } = useVault()
 
 // ---- Enso ----
 const { getZapQuote, getWalletBalances, NATIVE_TOKEN } = useEnso()
 const { getTokenPrices } = useCoinGecko()
-const { createTransaction } = useUserData()
 
-// ---- Asset USD prices ----
-const assetPrices = ref<Record<string, number>>({})
-
-async function fetchAssetPrices() {
-  const addresses = STRATEGY_LIST.map(s => s.assetAddress as string)
-  const prices = await getTokenPrices(addresses)
-  assetPrices.value = prices
-}
-
-function getAssetPrice(strategyKey: string): number {
-  const strategy = STRATEGIES[strategyKey as StrategyKey]
-  if (!strategy) return 0
-  return assetPrices.value[strategy.assetAddress.toLowerCase()] ?? 0
-}
-
-// ---- Portfolio totals ----
-const totalPortfolioUsd = computed(() => {
-  return pockets.value.reduce((sum, pocket) => {
-    const pos = pocketPositions.value[pocket.id]
-    if (!pos || pos.value === 0n) return sum
-    const strategy = STRATEGIES[pocket.strategy_key as StrategyKey]
-    if (!strategy) return sum
-    const assetVal = parseFloat(formatUnits(pos.value, strategy.decimals))
-    const price = getAssetPrice(pocket.strategy_key)
-    return sum + assetVal * price
-  }, 0)
-})
-
-const totalPortfolioFormatted = computed(() => {
-  if (totalPortfolioUsd.value === 0) return '$0.00'
-  return '$' + totalPortfolioUsd.value.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-})
-
-const pocketCount = computed(() => pockets.value.length)
-
-// ---- Vault APY data ----
-const vaultApys = ref<Record<string, string | null>>({})
-
-async function fetchVaultSnapshots() {
-  for (const strategy of STRATEGY_LIST) {
-    try {
-      const snapshot = await getVaultSnapshot(strategy)
-      if (snapshot?.yield) {
-        vaultApys.value[strategy.key] = snapshot.yield['7d'] ?? snapshot.yield['30d'] ?? null
-      }
-    } catch (e) {
-      console.error(`[apy] ${strategy.vaultSymbol} snapshot failed:`, e)
-    }
-  }
-}
-
-function getStrategyApy(strategyKey: string): string | null {
-  return vaultApys.value[strategyKey] ?? null
-}
-
-// ---- User profit data ----
-const pocketProfits = ref<Record<string, string | null>>({})
-
-async function fetchUserPerformances() {
-  if (!address.value) return
-  const seen = new Set<string>()
-  for (const pocket of pockets.value) {
-    const strategy = STRATEGIES[pocket.strategy_key as StrategyKey]
-    if (!strategy || seen.has(strategy.key)) continue
-    seen.add(strategy.key)
-    try {
-      const perf = await getUserPerformance(strategy, address.value)
-      if (perf) {
-        // Store by strategy key — all pockets with same strategy share vault performance
-        for (const p of pockets.value.filter(pp => pp.strategy_key === strategy.key)) {
-          pocketProfits.value[p.id] = perf.unrealized.formatted
-        }
-      }
-    } catch (e) {
-      console.error(`[profit] ${strategy.vaultSymbol} performance failed:`, e)
-    }
-  }
-}
-
-// ---- Pocket positions ----
-const pocketPositions = ref<Record<string, { shares: bigint; value: bigint }>>({})
-const loadingPosition = ref(false)
-
-async function fetchPocketPosition(pocket: DbPocket) {
-  const strategy = STRATEGIES[pocket.strategy_key as StrategyKey]
-  if (!strategy || !address.value) return
-  loadingPosition.value = true
-  try {
-    const shares = await getShareBalance(strategy)
-    const value = await getShareValue(strategy, shares)
-    pocketPositions.value[pocket.id] = { shares, value }
-  } catch (e) {
-    console.error(`[position] ${pocket.name} fetch failed:`, e)
-    pocketPositions.value[pocket.id] = { shares: 0n, value: 0n }
-  } finally {
-    loadingPosition.value = false
-  }
-}
-
-async function fetchAllPositions() {
-  await Promise.all([
-    fetchAssetPrices(),
-    fetchVaultSnapshots(),
-    ...pockets.value.map(fetchPocketPosition),
-  ])
-  // Fetch after positions are loaded
-  fetchUserPerformances()
-}
-
-watch(pockets, () => { if (pockets.value.length) fetchAllPositions() })
 watch(txState, (s) => {
   if (s === 'confirmed') {
-    // Log transaction to Supabase
-    if (pendingTxInfo.value && txHash.value) {
-      createTransaction({
-        pocket_id: pendingTxInfo.value.pocketId,
-        type: pendingTxInfo.value.type,
-        amount: pendingTxInfo.value.amount,
-        asset_symbol: pendingTxInfo.value.assetSymbol,
-        tx_hash: txHash.value,
-      }).then(() => { pendingTxInfo.value = null })
-    }
     fetchBalances()
-    fetchAllPositions()
+    if (address.value) profileStore.fetchAllPositions(address.value)
     profileStore.refreshPockets()
     setTimeout(() => {
       showDepositDialog.value = false
@@ -253,16 +133,30 @@ async function handleCreatePocket(payload: {
 }
 
 // ---- Delete pocket ----
-async function handleDeletePocket(pocket: DbPocket) {
-  const ok = await profileStore.deletePocket(pocket.id)
-  if (ok && selectedPocket.value?.id === pocket.id) {
-    selectedPocket.value = null
-    showDepositDialog.value = false
-  }
+const showDeleteConfirm = ref(false)
+const pocketToDelete = ref<DbPocket | null>(null)
+const deletingPocket = ref(false)
+
+function requestDeletePocket(pocket: DbPocket) {
+  pocketToDelete.value = pocket
+  showDeleteConfirm.value = true
 }
 
-// ---- Pending tx info for logging ----
-const pendingTxInfo = ref<{ pocketId: string; type: 'deposit' | 'withdraw'; amount: string; assetSymbol: string } | null>(null)
+async function confirmDeletePocket() {
+  if (!pocketToDelete.value) return
+  deletingPocket.value = true
+  try {
+    const ok = await profileStore.deletePocket(pocketToDelete.value.id)
+    if (ok && selectedPocket.value?.id === pocketToDelete.value.id) {
+      selectedPocket.value = null
+      showDepositDialog.value = false
+    }
+  } finally {
+    deletingPocket.value = false
+    showDeleteConfirm.value = false
+    pocketToDelete.value = null
+  }
+}
 
 // ---- Deposit / Withdraw dialog ----
 const selectedPocket = ref<DbPocket | null>(null)
@@ -290,7 +184,7 @@ function openDepositDialog(pocket: DbPocket, mode: 'deposit' | 'withdraw' = 'dep
   zapQuote.value = null
   reset()
   showDepositDialog.value = true
-  fetchPocketPosition(pocket)
+  profileStore.fetchPocketPosition(pocket)
   if (mode === 'deposit') fetchWalletTokens()
 }
 
@@ -331,13 +225,6 @@ async function handleDeposit(payload: { tokenIn: `0x${string}`; amount: string; 
   const strategy = selectedStrategy.value
   if (!strategy || !address.value || !selectedPocket.value) return
 
-  pendingTxInfo.value = {
-    pocketId: selectedPocket.value.id,
-    type: 'deposit',
-    amount: payload.amount,
-    assetSymbol: strategy.assetSymbol,
-  }
-
   if (payload.isDirect) {
     const parsed = parseUnits(payload.amount, strategy.decimals)
     if (parsed === 0n) return
@@ -355,13 +242,6 @@ async function handleDeposit(payload: { tokenIn: `0x${string}`; amount: string; 
 async function handleWithdraw(amount: string) {
   const strategy = selectedStrategy.value
   if (!strategy || !address.value || !selectedPocket.value) return
-
-  pendingTxInfo.value = {
-    pocketId: selectedPocket.value.id,
-    type: 'withdraw',
-    amount,
-    assetSymbol: strategy.assetSymbol,
-  }
 
   const parsed = parseUnits(amount, strategy.decimals)
   if (parsed === 0n) return
@@ -406,16 +286,14 @@ const lowGas = computed(() => ethBalance.value < parseUnits('0.0005', 18))
       v-if="!isConnected"
       class="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] gap-4"
     >
-      <div class="w-16 h-16 bg-green-500 rounded-2xl flex items-center justify-center mb-2">
-        <Icon name="lucide:piggy-bank" class="w-8 h-8 text-white" />
-      </div>
+      <img src="/logo.png" alt="Nestora" class="w-20 h-20 mb-2" />
       <h2 class="text-xl font-semibold">Your money, growing</h2>
       <p class="text-muted-foreground text-center text-sm max-w-65">
         Sign in to start earning interest on your savings.
       </p>
       <Button
         size="lg"
-        class="mt-6 bg-green-500 text-white hover:bg-green-600"
+        class="mt-6 bg-primary text-primary-foreground hover:bg-primary/90"
         @click="showConnectModal = true"
       >
         Get Started
@@ -448,7 +326,8 @@ const lowGas = computed(() => ethBalance.value < parseUnits('0.0005', 18))
       <!-- Portfolio summary -->
       <div class="mb-8">
         <p class="text-sm text-muted-foreground mb-1">Total balance</p>
-        <h1 class="text-4xl font-bold tracking-tight">{{ totalPortfolioFormatted }}</h1>
+        <Skeleton v-if="loadingPositions" class="h-10 w-40 mb-1" />
+        <h1 v-else class="text-4xl font-bold tracking-tight">{{ totalPortfolioFormatted }}</h1>
         <p class="text-sm text-muted-foreground mt-1">
           {{ pocketCount }} pocket{{ pocketCount !== 1 ? 's' : '' }}
         </p>
@@ -457,7 +336,7 @@ const lowGas = computed(() => ethBalance.value < parseUnits('0.0005', 18))
       <div class="flex items-center justify-between mb-5">
         <h2 class="text-lg font-semibold">Pockets</h2>
         <Button
-          class="bg-green-500 text-white hover:bg-green-600"
+          class="bg-primary text-primary-foreground hover:bg-primary/90"
           @click="showCreateDialog = true"
         >
           <Icon name="lucide:plus" class="w-4 h-4 mr-1.5" />
@@ -476,14 +355,14 @@ const lowGas = computed(() => ethBalance.value < parseUnits('0.0005', 18))
       <!-- Empty state -->
       <div
         v-else-if="pockets.length === 0"
-        class="rounded-2xl bg-linear-to-br from-green-500/5 via-background to-emerald-500/5 border border-dashed border-green-500/20 p-14 flex flex-col items-center justify-center text-center"
+        class="rounded-2xl bg-linear-to-br from-primary/5 via-background to-primary/5 border border-dashed border-primary/20 p-14 flex flex-col items-center justify-center text-center"
       >
         <div class="relative mb-6">
-          <div class="w-20 h-20 rounded-2xl bg-green-500/10 flex items-center justify-center">
-            <Icon name="lucide:piggy-bank" class="w-10 h-10 text-green-500" />
+          <div class="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center">
+            <Icon name="lucide:piggy-bank" class="w-10 h-10 text-primary" />
           </div>
-          <div class="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center">
-            <Icon name="lucide:sparkles" class="w-4 h-4 text-emerald-400" />
+          <div class="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+            <Icon name="lucide:sparkles" class="w-4 h-4 text-primary" />
           </div>
         </div>
         <h3 class="text-xl font-semibold mb-2">Start saving</h3>
@@ -492,7 +371,7 @@ const lowGas = computed(() => ethBalance.value < parseUnits('0.0005', 18))
         </p>
         <Button
           size="lg"
-          class="bg-green-500 text-white hover:bg-green-600"
+          class="bg-primary text-primary-foreground hover:bg-primary/90"
           @click="showCreateDialog = true"
         >
           <Icon name="lucide:plus" class="w-4 h-4 mr-1.5" />
@@ -507,13 +386,14 @@ const lowGas = computed(() => ethBalance.value < parseUnits('0.0005', 18))
           :key="pocket.id"
           :pocket="pocket"
           :position="pocketPositions[pocket.id] || { shares: 0n, value: 0n }"
-          :asset-price="getAssetPrice(pocket.strategy_key)"
-          :apy="getStrategyApy(pocket.strategy_key)"
+          :asset-price="profileStore.getAssetPrice(pocket.strategy_key)"
+          :apy="profileStore.getStrategyApy(pocket.strategy_key)"
           :profit="pocketProfits[pocket.id] ?? null"
+          :loading="loadingPositions"
           @click="navigateTo(`/pocket/${pocket.id}`)"
           @deposit="openDepositDialog(pocket, 'deposit')"
           @withdraw="openDepositDialog(pocket, 'withdraw')"
-          @delete="handleDeletePocket(pocket)"
+          @delete="requestDeletePocket(pocket)"
         />
       </div>
     </main>
@@ -540,19 +420,42 @@ const lowGas = computed(() => ethBalance.value < parseUnits('0.0005', 18))
       :tx-error="txError"
       :wallet-tokens="walletTokens"
       :loading-tokens="loadingTokens"
-      :loading-position="loadingPosition"
+      :loading-position="loadingPositions"
       :fetching-quote="fetchingQuote"
       :zap-quote="zapQuote"
       :native-token="NATIVE_TOKEN"
-      :asset-price="selectedPocket ? getAssetPrice(selectedPocket.strategy_key) : 0"
+      :asset-price="selectedPocket ? profileStore.getAssetPrice(selectedPocket.strategy_key) : 0"
       @deposit="handleDeposit"
       @withdraw="handleWithdraw"
       @reset="reset"
       @fetch-tokens="fetchWalletTokens"
-      @fetch-position="selectedPocket && fetchPocketPosition(selectedPocket)"
+      @fetch-position="selectedPocket && profileStore.fetchPocketPosition(selectedPocket)"
       @select-token="handleSelectToken"
       @update-amount="handleUpdateAmount"
       @change-mode="handleChangeMode"
     />
+
+    <!-- Delete Confirmation -->
+    <AlertDialog v-model:open="showDeleteConfirm">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete pocket?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to delete <span class="font-medium text-foreground">{{ pocketToDelete?.name }}</span>? This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel :disabled="deletingPocket">Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            :disabled="deletingPocket"
+            @click.prevent="confirmDeletePocket"
+          >
+            <Icon v-if="deletingPocket" name="lucide:loader-2" class="w-4 h-4 mr-1.5 animate-spin" />
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </div>
 </template>

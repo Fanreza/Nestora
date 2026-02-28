@@ -22,13 +22,14 @@ onUnmounted(() => {
       : ''"
   >
     <nav class="max-w-6xl mx-auto px-5 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-      <NuxtLink to="/" class="text-lg font-bold tracking-tight text-foreground">
-        Nestora
+      <NuxtLink to="/" class="flex items-center gap-2.5">
+        <img src="/logo.png" alt="Nestora" class="w-9 h-9" />
+        <span class="text-lg font-bold tracking-tight text-foreground">Nestora</span>
       </NuxtLink>
 
       <Button
         size="sm"
-        class="rounded-full bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 hover:border-green-500/30 backdrop-blur-sm"
+        class="rounded-full bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 hover:border-primary/30 backdrop-blur-sm"
         @click="navigateTo('/app')"
       >
         Launch App

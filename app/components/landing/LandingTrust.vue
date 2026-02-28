@@ -71,7 +71,7 @@ const trustItems = [
         :class="visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'"
         :style="{ transitionDelay: visible ? '600ms' : '0ms' }"
       >
-        <div class="w-16 h-px bg-green-500/20 mx-auto mb-16" />
+        <div class="w-16 h-px bg-primary/20 mx-auto mb-16" />
 
         <h3 class="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-[-0.03em] mb-4">
           Ready to grow your savings?
@@ -81,9 +81,9 @@ const trustItems = [
         </p>
         <button
           class="inline-flex items-center justify-center h-12 px-8 text-base font-semibold
-                 rounded-full bg-green-500 text-white
-                 shadow-lg shadow-green-500/25
-                 hover:bg-green-400 hover:shadow-green-500/35
+                 rounded-full bg-primary text-white
+                 shadow-lg shadow-primary/25
+                 hover:bg-primary/80 hover:shadow-primary/35
                  active:scale-[0.98] transition-all duration-200"
           @click="navigateTo('/app')"
         >

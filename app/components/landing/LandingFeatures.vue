@@ -56,10 +56,10 @@ const features = [
           :style="{ transitionDelay: visible ? `${200 + i * 100}ms` : '0ms' }"
         >
           <div
-            class="w-12 h-12 rounded-xl bg-green-500/10 border border-green-500/15
+            class="w-12 h-12 rounded-xl bg-primary/10 border border-primary/15
                    flex items-center justify-center mx-auto mb-4"
           >
-            <Icon :name="f.icon" class="w-6 h-6 text-green-400" />
+            <Icon :name="f.icon" class="w-6 h-6 text-primary" />
           </div>
           <h3 class="font-semibold mb-1.5 text-foreground text-sm">{{ f.title }}</h3>
           <p class="text-sm text-muted-foreground leading-relaxed max-w-56 mx-auto">

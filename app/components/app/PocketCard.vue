@@ -9,6 +9,7 @@ const props = defineProps<{
   assetPrice: number
   apy: string | null
   profit: string | null
+  loading?: boolean
 }>()
 
 defineEmits<{
@@ -59,15 +60,20 @@ const apyFormatted = computed(() => {
   return val.toFixed(2) + '%'
 })
 
-const profitFormatted = computed(() => {
+const profitUsd = computed(() => {
   if (!props.profit) return null
   const val = parseFloat(props.profit)
   if (isNaN(val) || val === 0) return null
-  const sign = val > 0 ? '+' : ''
-  const formatted = Math.abs(val) < 0.0001
-    ? (val > 0 ? '<+0.0001' : '<-0.0001')
-    : sign + val.toLocaleString('en-US', { maximumFractionDigits: 4 })
-  return formatted
+  return val * props.assetPrice
+})
+
+const profitFormatted = computed(() => {
+  if (profitUsd.value == null) return null
+  const sign = profitUsd.value > 0 ? '+' : ''
+  return sign + '$' + Math.abs(profitUsd.value).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
 })
 
 const timelineDisplay = computed(() => {
@@ -84,14 +90,14 @@ const timelineDisplay = computed(() => {
 })
 
 function displayUsd(value: number): string {
-  if (value === 0) return '$0'
-  return '$' + value.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  if (value === 0) return '$0.00'
+  return '$' + value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 </script>
 
 <template>
   <Card
-    class="group cursor-pointer border-transparent hover:border-green-500/40 hover:shadow-lg transition-all duration-300"
+    class="group cursor-pointer border-transparent hover:border-primary/40 hover:shadow-lg transition-all duration-300"
     @click="$emit('click')"
   >
     <CardContent class="p-5">
@@ -118,8 +124,9 @@ function displayUsd(value: number): string {
             · {{ risk?.label }}
           </p>
         </div>
+        <Skeleton v-if="loading" class="h-5 w-20 shrink-0 rounded-full" />
         <Badge
-          v-if="apyFormatted"
+          v-else-if="apyFormatted"
           variant="secondary"
           class="shrink-0 text-xs font-medium"
         >
@@ -129,24 +136,30 @@ function displayUsd(value: number): string {
 
       <!-- Middle: USD hero value + profit -->
       <div class="mb-4">
-        <div class="flex items-baseline gap-2">
-          <p class="text-2xl font-bold tracking-tight">
-            {{ displayUsd(usdValue) }}
+        <template v-if="loading">
+          <Skeleton class="h-8 w-24 mb-1.5" />
+          <Skeleton class="h-3.5 w-40" />
+        </template>
+        <template v-else>
+          <div class="flex items-baseline gap-2">
+            <p class="text-2xl font-bold tracking-tight">
+              {{ displayUsd(usdValue) }}
+            </p>
+            <span
+              v-if="profitFormatted"
+              class="text-xs font-medium"
+              :class="(profitUsd ?? 0) >= 0 ? 'text-primary' : 'text-red-500'"
+            >
+              {{ profitFormatted }}
+            </span>
+          </div>
+          <p class="text-xs text-muted-foreground mt-0.5">
+            {{ currentValueFormatted }} {{ strategy?.assetLabel }}
+            <span v-if="pocket.target_amount">
+              · {{ displayUsd(pocket.target_amount) }} target
+            </span>
           </p>
-          <span
-            v-if="profitFormatted"
-            class="text-xs font-medium"
-            :class="parseFloat(profit || '0') >= 0 ? 'text-emerald-500' : 'text-red-500'"
-          >
-            {{ profitFormatted }} {{ strategy?.assetLabel }}
-          </span>
-        </div>
-        <p class="text-xs text-muted-foreground mt-0.5">
-          {{ currentValueFormatted }} {{ strategy?.assetLabel }}
-          <span v-if="pocket.target_amount">
-            · {{ displayUsd(pocket.target_amount) }} target
-          </span>
-        </p>
+        </template>
       </div>
 
       <!-- Timeline -->
@@ -163,10 +176,12 @@ function displayUsd(value: number): string {
       <div v-if="pocket.target_amount" class="mb-4">
         <div class="flex items-center justify-between mb-1.5">
           <span class="text-xs text-muted-foreground">Progress</span>
-          <span class="text-xs font-medium">{{ progress }}%</span>
+          <Skeleton v-if="loading" class="h-3.5 w-8" />
+          <span v-else class="text-xs font-medium">{{ progress }}%</span>
         </div>
         <div class="h-2.5 rounded-full bg-muted overflow-hidden">
           <div
+            v-if="!loading"
             class="h-full rounded-full transition-all duration-500"
             :class="{
               'bg-emerald-500': pocket.strategy_key === 'conservative',

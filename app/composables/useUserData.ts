@@ -1,4 +1,4 @@
-import type { DbUser, DbPocket, DbTransaction, CreatePocketInput, UpdatePocketInput, CreateTransactionInput } from '~/types/database'
+import type { DbUser, DbPocket, CreatePocketInput, UpdatePocketInput } from '~/types/database'
 import { useSupabase } from './useSupabase'
 
 export function useUserData() {
@@ -110,36 +110,6 @@ export function useUserData() {
     return true
   }
 
-  // ---- Transaction CRUD ----
-
-  async function createTransaction(input: CreateTransactionInput): Promise<DbTransaction | null> {
-    const { data, error } = await supabase
-      .from('transactions')
-      .insert(input)
-      .select()
-      .single()
-
-    if (error) {
-      console.error('[useUserData] createTransaction error:', error.message)
-      return null
-    }
-    return data as DbTransaction
-  }
-
-  async function getTransactions(pocketId: string): Promise<DbTransaction[]> {
-    const { data, error } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('pocket_id', pocketId)
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      console.error('[useUserData] getTransactions error:', error.message)
-      return []
-    }
-    return (data ?? []) as DbTransaction[]
-  }
-
   return {
     ensureUser,
     getUser,
@@ -148,7 +118,5 @@ export function useUserData() {
     createPocket,
     updatePocket,
     deletePocket,
-    createTransaction,
-    getTransactions,
   }
 }

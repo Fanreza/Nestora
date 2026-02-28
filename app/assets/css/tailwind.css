@@ -39,38 +39,38 @@
 }
 
 .dark {
-  --background: hsl(0 0% 3.9%);
-  --foreground: hsl(0 0% 98%);
-  --card: hsl(0 0% 3.9%);
-  --card-foreground: hsl(0 0% 98%);
-  --popover: hsl(0 0% 3.9%);
-  --popover-foreground: hsl(0 0% 98%);
-  --primary: hsl(0 0% 98%);
-  --primary-foreground: hsl(0 0% 9%);
-  --secondary: hsl(0 0% 14.9%);
-  --secondary-foreground: hsl(0 0% 98%);
-  --muted: hsl(0 0% 14.9%);
-  --muted-foreground: hsl(0 0% 63.9%);
-  --accent: hsl(0 0% 14.9%);
-  --accent-foreground: hsl(0 0% 98%);
-  --destructive: hsl(0 62.8% 30.6%);
+  --background: hsl(150 12% 5%);
+  --foreground: hsl(140 8% 94%);
+  --card: hsl(150 10% 8%);
+  --card-foreground: hsl(140 8% 94%);
+  --popover: hsl(150 10% 8%);
+  --popover-foreground: hsl(140 8% 94%);
+  --primary: hsl(152 40% 44%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(150 8% 12%);
+  --secondary-foreground: hsl(140 6% 90%);
+  --muted: hsl(150 6% 14%);
+  --muted-foreground: hsl(140 5% 55%);
+  --accent: hsl(150 8% 12%);
+  --accent-foreground: hsl(140 8% 94%);
+  --destructive: hsl(0 72% 51%);
   --destructive-foreground: hsl(0 0% 98%);
-  --border: hsl(0 0% 14.9%);
-  --input: hsl(0 0% 14.9%);
-  --ring: hsl(0 0% 83.1%);
-  --chart-1: hsl(220 70% 50%);
-  --chart-2: hsl(160 60% 45%);
-  --chart-3: hsl(30 80% 55%);
-  --chart-4: hsl(280 65% 60%);
-  --chart-5: hsl(340 75% 55%);
-  --sidebar: hsl(0 0% 3.9%);
-  --sidebar-foreground: hsl(0 0% 98%);
-  --sidebar-primary: hsl(0 0% 98%);
-  --sidebar-primary-foreground: hsl(0 0% 9%);
-  --sidebar-accent: hsl(0 0% 14.9%);
-  --sidebar-accent-foreground: hsl(0 0% 98%);
-  --sidebar-border: hsl(0 0% 14.9%);
-  --sidebar-ring: hsl(0 0% 83.1%);
+  --border: hsl(150 5% 15%);
+  --input: hsl(150 5% 15%);
+  --ring: hsl(152 40% 44%);
+  --chart-1: hsl(152 45% 50%);
+  --chart-2: hsl(35 55% 60%);
+  --chart-3: hsl(200 60% 50%);
+  --chart-4: hsl(280 55% 55%);
+  --chart-5: hsl(340 65% 55%);
+  --sidebar: hsl(150 12% 5%);
+  --sidebar-foreground: hsl(140 8% 94%);
+  --sidebar-primary: hsl(152 40% 44%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(150 8% 12%);
+  --sidebar-accent-foreground: hsl(140 8% 94%);
+  --sidebar-border: hsl(150 5% 15%);
+  --sidebar-ring: hsl(152 40% 44%);
 }
 
 @theme inline {
@@ -164,6 +164,6 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground font-['Inter',sans-serif];
+    @apply bg-background text-foreground font-['Plus_Jakarta_Sans',sans-serif];
   }
 }

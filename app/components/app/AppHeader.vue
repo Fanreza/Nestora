@@ -15,12 +15,15 @@ defineEmits<{
 <template>
   <header class="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b">
     <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-      <NuxtLink to="/" class="text-xl font-bold tracking-tight">Nestora</NuxtLink>
+      <NuxtLink to="/" class="flex items-center gap-2">
+        <img src="/logo.png" alt="Nestora" class="w-9 h-9" />
+        <span class="text-xl font-bold tracking-tight">Nestora</span>
+      </NuxtLink>
 
       <Button
         v-if="!isConnected"
         size="sm"
-        class="bg-green-500 text-white hover:bg-green-600"
+        class="bg-primary text-primary-foreground hover:bg-primary/90"
         @click="$emit('signIn')"
       >
         <Icon name="lucide:log-in" class="w-4 h-4 mr-1.5" />

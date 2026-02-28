@@ -5,6 +5,28 @@ import type { Strategy } from '~/config/strategies'
 import { useEnso } from './useEnso'
 import { createYoClient, YO_GATEWAY_ADDRESS } from '@yo-protocol/core'
 
+export interface VaultSnapshotResult {
+  yield: {
+    '1d': string | null
+    '7d': string | null
+    '30d': string | null
+  }
+  tvl: string | null
+}
+
+export interface UserHistoryEntry {
+  type: 'deposit' | 'withdraw' | 'redeem'
+  timestamp: number
+  assets: { raw: string; formatted: string }
+  shares: { raw: string; formatted: string }
+  txHash: string
+}
+
+export interface UserPerformanceResult {
+  realized: { raw: string; formatted: string }
+  unrealized: { raw: string; formatted: string }
+}
+
 export type TxState =
   | 'idle'
   | 'preparing'
@@ -253,10 +275,28 @@ export function useVault() {
   }
 
   // ---- Vault Snapshot (APY data) ----
-  async function getVaultSnapshot(strategy: Strategy) {
+  // Call Yo API directly — the SDK's Zod schema has a bug where
+  // idleBalances[].raw is expected as string but API returns number
+  async function getVaultSnapshot(strategy: Strategy): Promise<VaultSnapshotResult | null> {
     try {
-      const client = getReadClient()
-      return await client.getVaultSnapshot(strategy.vaultAddress)
+      const res = await fetch(
+        `https://api.yo.xyz/api/v1/vault/base/${strategy.vaultAddress}`,
+      )
+      if (!res.ok) {
+        console.error(`[vault] snapshot API ${res.status} for ${strategy.vaultSymbol}`)
+        return null
+      }
+      const json = await res.json()
+      const yld = json.data?.stats?.yield
+      const tvlRaw = json.data?.stats?.tvl
+      return {
+        yield: {
+          '1d': yld?.['1d'] ?? null,
+          '7d': yld?.['7d'] ?? null,
+          '30d': yld?.['30d'] ?? null,
+        },
+        tvl: tvlRaw?.formatted ?? (tvlRaw?.raw != null ? String(tvlRaw.raw) : null),
+      }
     } catch (e) {
       console.error(`[vault] getVaultSnapshot(${strategy.vaultSymbol}) failed:`, e)
       return null
@@ -264,10 +304,22 @@ export function useVault() {
   }
 
   // ---- User Transaction History ----
-  async function getUserHistory(strategy: Strategy, userAddress: string) {
+  // Call Yo API directly — SDK schema expects lowercase type + different field names
+  async function getUserHistory(strategy: Strategy, userAddress: string): Promise<UserHistoryEntry[]> {
     try {
-      const client = getReadClient()
-      return await client.getUserHistory(strategy.vaultAddress, userAddress as `0x${string}`)
+      const res = await fetch(
+        `https://api.yo.xyz/api/v1/history/user/base/${strategy.vaultAddress}/${userAddress}`,
+      )
+      if (!res.ok) return []
+      const json = await res.json()
+      const items = json.data ?? []
+      return items.map((item: any) => ({
+        type: (item.type as string).toLowerCase() as 'deposit' | 'withdraw' | 'redeem',
+        timestamp: item.blockTimestamp,
+        assets: { raw: String(item.assets?.raw ?? '0'), formatted: item.assets?.formatted ?? '0' },
+        shares: { raw: String(item.shares?.raw ?? '0'), formatted: item.shares?.formatted ?? '0' },
+        txHash: item.transactionHash,
+      }))
     } catch (e) {
       console.error(`[vault] getUserHistory(${strategy.vaultSymbol}) failed:`, e)
       return []
@@ -275,10 +327,20 @@ export function useVault() {
   }
 
   // ---- User Performance (profit) ----
-  async function getUserPerformance(strategy: Strategy, userAddress: string) {
+  // Call Yo API directly — SDK schema expects raw as string but API returns number
+  async function getUserPerformance(strategy: Strategy, userAddress: string): Promise<UserPerformanceResult | null> {
     try {
-      const client = getReadClient()
-      return await client.getUserPerformance(strategy.vaultAddress, userAddress as `0x${string}`)
+      const res = await fetch(
+        `https://api.yo.xyz/api/v1/performance/user/base/${strategy.vaultAddress}/${userAddress}`,
+      )
+      if (!res.ok) return null
+      const json = await res.json()
+      const data = json.data
+      if (!data) return null
+      return {
+        realized: { raw: String(data.realized?.raw ?? '0'), formatted: data.realized?.formatted ?? '0' },
+        unrealized: { raw: String(data.unrealized?.raw ?? '0'), formatted: data.unrealized?.formatted ?? '0' },
+      }
     } catch (e) {
       console.error(`[vault] getUserPerformance(${strategy.vaultSymbol}) failed:`, e)
       return null

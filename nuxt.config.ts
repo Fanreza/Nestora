@@ -24,7 +24,7 @@ export default defineNuxtConfig({
 
   fonts: {
     families: [
-      { name: 'Inter', provider: 'google', weights: [400, 500, 600, 700] },
+      { name: 'Plus Jakarta Sans', provider: 'google', weights: [400, 500, 600, 700, 800] },
     ],
   },
 
@@ -39,11 +39,16 @@ export default defineNuxtConfig({
 
   app: {
     head: {
+      htmlAttrs: { class: 'dark' },
       title: 'Nestora',
       meta: [
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no' },
         { name: 'description', content: 'Smart savings on Base' },
+      ],
+      link: [
+        { rel: 'icon', type: 'image/png', href: '/logo.png' },
+        { rel: 'apple-touch-icon', href: '/logo.png' },
       ],
     },
   },

@@ -90,14 +90,23 @@ const isDirectDeposit = computed(() => {
   return selectedTokenAddr.value.toLowerCase() === vaultAsset.toLowerCase()
 })
 
+const isVaultToken = (tokenAddr: string): boolean => {
+  if (!strategy.value) return false
+  return tokenAddr.toLowerCase() === strategy.value.vaultAddress.toLowerCase()
+}
+
+const availableTokens = computed(() =>
+  props.walletTokens.filter(t => !isVaultToken(t.token)),
+)
+
 const directDepositTokens = computed(() =>
-  props.walletTokens.filter(t => isDirectToken(t.token)),
+  availableTokens.value.filter(t => isDirectToken(t.token)),
 )
 
 const filteredTokens = computed(() => {
   const q = tokenSearch.value.toLowerCase().trim()
-  if (!q) return props.walletTokens
-  return props.walletTokens.filter(t =>
+  if (!q) return availableTokens.value
+  return availableTokens.value.filter(t =>
     t.symbol.toLowerCase().includes(q)
     || t.name.toLowerCase().includes(q)
     || t.token.toLowerCase().includes(q),
@@ -162,10 +171,18 @@ function formatUsd(v: number): string {
   return '$' + v.toLocaleString('en-US', { maximumFractionDigits: 2 })
 }
 
+function formatCompactBal(val: number): string {
+  if (val === 0) return '0'
+  if (val < 0.0001) return val.toPrecision(2)
+  if (val < 1) return val.toPrecision(4)
+  if (val < 1000) return val.toFixed(2)
+  return val.toLocaleString('en-US', { maximumFractionDigits: 2 })
+}
+
 function displayNum(value: string, maxDec = 6): string {
   const n = parseFloat(value)
   if (isNaN(n) || n === 0) return '0'
-  if (n < 0.000001) return '<0.000001'
+  if (n < 1 / Math.pow(10, maxDec)) return n.toPrecision(2)
   return n.toLocaleString('en-US', { maximumFractionDigits: maxDec })
 }
 
@@ -267,7 +284,12 @@ defineExpose({ openFor })
         </DialogHeader>
 
         <!-- Current position -->
-        <div v-if="position.value > 0n && strategy" class="mt-3 p-3 bg-muted rounded-lg">
+        <div v-if="loadingPosition" class="mt-3 p-3 bg-muted rounded-lg">
+          <Skeleton class="h-3 w-24 mb-1.5" />
+          <Skeleton class="h-6 w-36 mb-1" />
+          <Skeleton class="h-4 w-16" />
+        </div>
+        <div v-else-if="position.value > 0n && strategy" class="mt-3 p-3 bg-muted rounded-lg">
           <p class="text-xs text-muted-foreground mb-0.5">Currently earning</p>
           <p class="text-lg font-semibold font-mono">
             {{ displayNum(formatUnits(position.value, strategy.decimals), 4) }}
@@ -289,7 +311,7 @@ defineExpose({ openFor })
 
       <!-- ===== VIEW: SELECT TOKEN (deposit mode) ===== -->
       <div v-if="mode === 'deposit' && view === 'select-token'" class="px-6 pb-6">
-        <h3 class="text-base font-bold mb-3">Select your asset</h3>
+        <h3 class="text-base font-bold mb-3 text-center">Select your asset</h3>
 
         <!-- Search -->
         <div class="relative mb-4">
@@ -302,9 +324,29 @@ defineExpose({ openFor })
         </div>
 
         <!-- Loading -->
-        <div v-if="loadingTokens" class="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-          <Icon name="lucide:loader-2" class="w-5 h-5 animate-spin" />
-          Loading your tokens...
+        <div v-if="loadingTokens" class="space-y-4">
+          <div>
+            <Skeleton class="h-3.5 w-32 mb-2" />
+            <div class="flex gap-2">
+              <Skeleton class="h-9 w-24 rounded-lg" />
+            </div>
+          </div>
+          <div>
+            <Skeleton class="h-3.5 w-24 mb-2" />
+            <div class="space-y-1">
+              <div v-for="i in 3" :key="i" class="flex items-center gap-3 px-3 py-2.5">
+                <Skeleton class="w-8 h-8 rounded-full shrink-0" />
+                <div class="flex-1">
+                  <Skeleton class="h-4 w-16 mb-1" />
+                  <Skeleton class="h-3 w-10" />
+                </div>
+                <div class="text-right">
+                  <Skeleton class="h-4 w-14 mb-1 ml-auto" />
+                  <Skeleton class="h-3 w-20 ml-auto" />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <template v-else>
@@ -315,7 +357,7 @@ defineExpose({ openFor })
               <button
                 v-for="t in directDepositTokens"
                 :key="t.token"
-                class="flex items-center gap-2 px-3 py-2 rounded-lg border border-green-500/30 bg-green-500/5 hover:bg-green-500/10 transition-all"
+                class="flex items-center gap-2 px-3 py-2 rounded-lg border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-all"
                 @click="selectToken(t)"
               >
                 <img
@@ -357,7 +399,7 @@ defineExpose({ openFor })
                     <Badge
                       v-if="isDirectToken(token.token)"
                       variant="outline"
-                      class="text-[10px] px-1.5 py-0 h-4 border-green-500/40 text-green-500"
+                      class="text-[10px] px-1.5 py-0 h-4 border-primary/40 text-primary"
                     >
                       Direct deposit
                     </Badge>
@@ -382,7 +424,7 @@ defineExpose({ openFor })
       <div v-else class="px-6 pb-6 space-y-4">
         <!-- Selected token display + amount (deposit mode) -->
         <div v-if="mode === 'deposit' && selectedTokenBalance" class="space-y-3">
-          <p class="text-xs font-medium text-muted-foreground">Select the asset you want to deposit</p>
+          <p class="text-xs font-medium text-muted-foreground text-center">Select the asset you want to deposit</p>
           <div class="flex items-center gap-3 p-3 rounded-xl border">
             <!-- Token selector trigger -->
             <button
@@ -413,7 +455,8 @@ defineExpose({ openFor })
                 type="text"
                 inputmode="decimal"
                 placeholder="0"
-                class="w-full text-right text-xl font-semibold font-mono bg-transparent outline-none placeholder:text-muted-foreground"
+                class="w-full text-right font-semibold font-mono bg-transparent outline-none placeholder:text-muted-foreground"
+                :class="amount && amount.length > 12 ? 'text-sm' : 'text-xl'"
                 :disabled="txState !== 'idle'"
               >
               <p class="text-[11px] text-muted-foreground font-mono">
@@ -427,31 +470,43 @@ defineExpose({ openFor })
             <button
               v-for="pct in [10, 25, 50, 75]"
               :key="pct"
-              class="py-2 rounded-lg border text-xs font-medium transition-all hover:border-green-500/30 hover:bg-green-500/5"
+              class="py-2 rounded-lg border text-xs font-medium transition-all hover:border-primary/30 hover:bg-primary/5"
               :disabled="txState !== 'idle'"
               @click="setPercentAmount(pct)"
             >
               {{ pct }}%
             </button>
             <button
-              class="py-2 rounded-lg border text-xs font-medium transition-all hover:border-green-500/30 hover:bg-green-500/5 flex flex-col items-center"
+              class="py-2 rounded-lg border text-xs font-medium transition-all hover:border-primary/30 hover:bg-primary/5 flex flex-col items-center"
               :disabled="txState !== 'idle'"
               @click="setMaxAmount"
             >
               <span class="font-bold">MAX</span>
-              <span class="text-[10px] text-muted-foreground font-mono">{{ selectedTokenBalance.formattedBal < 1000 ? selectedTokenBalance.formattedBal.toFixed(2) : displayNum(selectedTokenBalance.formattedBal.toString(), 2) }}</span>
+              <span class="text-[10px] text-muted-foreground font-mono">{{ formatCompactBal(selectedTokenBalance.formattedBal) }}</span>
             </button>
           </div>
         </div>
 
         <!-- Withdraw amount input -->
         <div v-if="mode === 'withdraw' && strategy" class="space-y-3">
-          <p class="text-xs font-medium text-muted-foreground">How much do you want to withdraw?</p>
+          <p class="text-xs font-medium text-muted-foreground text-center">How much do you want to withdraw?</p>
 
           <!-- Loading position -->
-          <div v-if="loadingPosition" class="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-            <Icon name="lucide:loader-2" class="w-4 h-4 animate-spin" />
-            Loading your balance...
+          <div v-if="loadingPosition" class="space-y-3">
+            <div class="flex items-center gap-3 p-3 rounded-xl border">
+              <Skeleton class="w-9 h-9 rounded-full shrink-0" />
+              <div>
+                <Skeleton class="h-4 w-20 mb-1" />
+                <Skeleton class="h-3 w-14" />
+              </div>
+              <div class="flex-1 text-right">
+                <Skeleton class="h-7 w-16 ml-auto mb-1" />
+                <Skeleton class="h-3 w-24 ml-auto" />
+              </div>
+            </div>
+            <div class="grid grid-cols-5 gap-2">
+              <Skeleton v-for="i in 5" :key="i" class="h-10 rounded-lg" />
+            </div>
           </div>
 
           <!-- Vault token + amount input -->
@@ -479,7 +534,8 @@ defineExpose({ openFor })
                 type="text"
                 inputmode="decimal"
                 placeholder="0"
-                class="w-full text-right text-xl font-semibold font-mono bg-transparent outline-none placeholder:text-muted-foreground"
+                class="w-full text-right font-semibold font-mono bg-transparent outline-none placeholder:text-muted-foreground"
+                :class="amount && amount.length > 12 ? 'text-sm' : 'text-xl'"
                 :disabled="txState !== 'idle'"
               >
               <p class="text-[11px] text-muted-foreground font-mono">
@@ -493,19 +549,19 @@ defineExpose({ openFor })
             <button
               v-for="pct in [10, 25, 50, 75]"
               :key="pct"
-              class="py-2 rounded-lg border text-xs font-medium transition-all hover:border-green-500/30 hover:bg-green-500/5"
+              class="py-2 rounded-lg border text-xs font-medium transition-all hover:border-primary/30 hover:bg-primary/5"
               :disabled="txState !== 'idle' || position.shares === 0n"
               @click="setWithdrawPercent(pct)"
             >
               {{ pct }}%
             </button>
             <button
-              class="py-2 rounded-lg border text-xs font-medium transition-all hover:border-green-500/30 hover:bg-green-500/5 flex flex-col items-center"
+              class="py-2 rounded-lg border text-xs font-medium transition-all hover:border-primary/30 hover:bg-primary/5 flex flex-col items-center"
               :disabled="txState !== 'idle' || position.shares === 0n"
               @click="setWithdrawMax"
             >
               <span class="font-bold">MAX</span>
-              <span class="text-[10px] text-muted-foreground font-mono">{{ withdrawableFormatted < 1000 ? withdrawableFormatted.toFixed(2) : displayNum(withdrawableFormatted.toString(), 2) }}</span>
+              <span class="text-[10px] text-muted-foreground font-mono">{{ formatCompactBal(withdrawableFormatted) }}</span>
             </button>
           </div>
 
@@ -538,7 +594,7 @@ defineExpose({ openFor })
         <!-- Action button -->
         <Button
           class="w-full h-12 text-base"
-          :class="txState !== 'failed' ? 'bg-green-500 text-white hover:bg-green-600' : ''"
+          :class="txState !== 'failed' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''"
           :variant="txState === 'failed' ? 'destructive' : 'default'"
           :disabled="!canSubmit && txState === 'idle'"
           @click="handleAction"
@@ -567,14 +623,14 @@ defineExpose({ openFor })
               class="w-2 h-2 rounded-full shrink-0"
               :class="{
                 'bg-amber-400 animate-pulse': isTxActive,
-                'bg-green-500': txState === 'confirmed',
+                'bg-primary': txState === 'confirmed',
                 'bg-destructive': txState === 'failed',
               }"
             />
             <span
               :class="{
                 'text-muted-foreground': isTxActive,
-                'text-green-600': txState === 'confirmed',
+                'text-primary': txState === 'confirmed',
                 'text-destructive': txState === 'failed',
               }"
             >
@@ -591,7 +647,7 @@ defineExpose({ openFor })
             :href="`https://basescan.org/tx/${txHash}`"
             target="_blank"
             rel="noopener"
-            class="inline-flex items-center gap-1 text-xs text-green-500 hover:underline"
+            class="inline-flex items-center gap-1 text-xs text-primary hover:underline"
           >
             View receipt
             <Icon name="lucide:external-link" class="w-3 h-3" />

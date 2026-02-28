@@ -1,24 +1,20 @@
 <script setup lang="ts">
 import { formatUnits } from 'viem'
-import { STRATEGIES, type StrategyKey } from '~/config/strategies'
-import type { DbPocket, DbTransaction } from '~/types/database'
+import { STRATEGIES, STRATEGY_LIST, type StrategyKey } from '~/config/strategies'
 import { useVault } from '~/composables/useVault'
 import { useWallet } from '~/composables/useWallet'
-import { useCoinGecko } from '~/composables/useCoinGecko'
-import { useUserData } from '~/composables/useUserData'
 import { storeToRefs } from 'pinia'
 import { useProfileStore } from '~/stores/useProfileStore'
-import type { VaultSnapshot, UserPerformance } from '@yo-protocol/core'
 
 const route = useRoute()
 const pocketId = route.params.id as string
 
 const { address, isConnected } = useWallet()
 const profileStore = useProfileStore()
-const { pockets } = storeToRefs(profileStore)
-const { getShareBalance, getShareValue, getVaultSnapshot, getUserHistory, getUserPerformance } = useVault()
-const { getTokenPrices } = useCoinGecko()
-const { getTransactions } = useUserData()
+const { pockets, pocketPositions, pocketProfits, loadingPositions } = storeToRefs(profileStore)
+const { getUserHistory } = useVault()
+
+const CIRCUMFERENCE = 2 * Math.PI * 42
 
 // ---- Pocket ----
 const pocket = computed(() => pockets.value.find(p => p.id === pocketId) ?? null)
@@ -38,63 +34,16 @@ const STRATEGY_LABELS: Record<string, string> = {
   aggressive: 'High Growth',
 }
 
-// ---- Position ----
-const position = ref<{ shares: bigint; value: bigint }>({ shares: 0n, value: 0n })
-const loadingPosition = ref(false)
+// ---- Position + price from store ----
+const position = computed(() =>
+  pocketPositions.value[pocketId] ?? { shares: 0n, value: 0n },
+)
 
-async function fetchPosition() {
-  if (!strategy.value || !address.value) return
-  loadingPosition.value = true
-  try {
-    const shares = await getShareBalance(strategy.value)
-    const value = await getShareValue(strategy.value, shares)
-    position.value = { shares, value }
-  } catch (e) {
-    console.error('[pocket detail] position fetch failed:', e)
-  } finally {
-    loadingPosition.value = false
-  }
-}
+const assetPrice = computed(() =>
+  pocket.value ? profileStore.getAssetPrice(pocket.value.strategy_key) : 0,
+)
 
-// ---- Asset price ----
-const assetPrice = ref(0)
-
-async function fetchPrice() {
-  if (!strategy.value) return
-  try {
-    const prices = await getTokenPrices([strategy.value.assetAddress])
-    assetPrice.value = prices[strategy.value.assetAddress.toLowerCase()] ?? 0
-  } catch (e) {
-    console.error('[pocket detail] price fetch failed:', e)
-  }
-}
-
-// ---- Vault snapshot (APY) ----
-const snapshot = ref<VaultSnapshot | null>(null)
-
-async function fetchSnapshot() {
-  if (!strategy.value) return
-  try {
-    snapshot.value = await getVaultSnapshot(strategy.value)
-  } catch (e) {
-    console.error('[pocket detail] snapshot fetch failed:', e)
-  }
-}
-
-// ---- User performance (profit) ----
-const performance = ref<UserPerformance | null>(null)
-
-async function fetchPerformance() {
-  if (!strategy.value || !address.value) return
-  try {
-    performance.value = await getUserPerformance(strategy.value, address.value)
-  } catch (e) {
-    console.error('[pocket detail] performance fetch failed:', e)
-  }
-}
-
-// ---- Transaction history ----
-// Combined from Supabase (local) + Yo API
+// ---- Transaction history (on-chain via Yo API) ----
 interface HistoryEntry {
   type: 'deposit' | 'withdraw' | 'redeem'
   timestamp: number
@@ -108,41 +57,13 @@ async function fetchHistory() {
   if (!strategy.value || !address.value) return
   loadingHistory.value = true
   try {
-    // Fetch from both sources in parallel
-    const [dbTxs, apiTxs] = await Promise.all([
-      getTransactions(pocketId),
-      getUserHistory(strategy.value, address.value),
-    ])
-
-    // Merge: dedupe by tx_hash, prefer Supabase data
-    const seen = new Set<string>()
-    const merged: HistoryEntry[] = []
-
-    // Supabase transactions first (pocket-specific)
-    for (const tx of dbTxs) {
-      seen.add(tx.tx_hash.toLowerCase())
-      merged.push({
-        type: tx.type,
-        timestamp: Math.floor(new Date(tx.created_at).getTime() / 1000),
-        amount: tx.amount,
-        txHash: tx.tx_hash,
-      })
-    }
-
-    // Yo API transactions (vault-wide, may include other pockets)
-    for (const tx of apiTxs) {
-      if (seen.has(tx.txHash.toLowerCase())) continue
-      merged.push({
-        type: tx.type,
-        timestamp: tx.timestamp,
-        amount: tx.assets.formatted,
-        txHash: tx.txHash,
-      })
-    }
-
-    // Sort by timestamp desc
-    merged.sort((a, b) => b.timestamp - a.timestamp)
-    history.value = merged
+    const txs = await getUserHistory(strategy.value, address.value)
+    history.value = txs.map(tx => ({
+      type: tx.type,
+      timestamp: tx.timestamp,
+      amount: tx.assets.formatted,
+      txHash: tx.txHash,
+    }))
   } catch (e) {
     console.error('[pocket detail] history fetch failed:', e)
     history.value = []
@@ -172,9 +93,8 @@ const progress = computed(() => {
 })
 
 const apyFormatted = computed(() => {
-  const yld = snapshot.value?.yield
-  if (!yld) return null
-  const val = yld['7d'] ?? yld['30d'] ?? null
+  if (!pocket.value) return null
+  const val = profileStore.getStrategyApy(pocket.value.strategy_key)
   if (!val) return null
   const num = parseFloat(val)
   if (isNaN(num)) return null
@@ -182,11 +102,19 @@ const apyFormatted = computed(() => {
 })
 
 const profitFormatted = computed(() => {
-  if (!performance.value) return null
-  const val = parseFloat(performance.value.unrealized.formatted)
+  const raw = pocketProfits.value[pocketId]
+  if (!raw) return null
+  const val = parseFloat(raw)
   if (isNaN(val) || val === 0) return null
-  const sign = val > 0 ? '+' : ''
-  return sign + val.toLocaleString('en-US', { maximumFractionDigits: 6 })
+  const usd = val * assetPrice.value
+  const sign = usd > 0 ? '+' : ''
+  return sign + '$' + Math.abs(usd).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+})
+
+const profitPositive = computed(() => {
+  const raw = pocketProfits.value[pocketId]
+  if (!raw) return true
+  return parseFloat(raw) >= 0
 })
 
 const timelineDisplay = computed(() => {
@@ -200,6 +128,110 @@ const timelineDisplay = computed(() => {
   if (diffDays < 0) return { date: dateStr, remaining: 'Past due', overdue: true }
   if (diffDays === 0) return { date: dateStr, remaining: 'Today', overdue: false }
   return { date: dateStr, remaining: `${diffDays} days left`, overdue: false }
+})
+
+// ---- Feature 1: Goal status ----
+const expectedProgress = computed(() => {
+  if (!pocket.value?.timeline || !pocket.value?.target_amount) return null
+  const start = new Date(pocket.value.created_at).getTime()
+  const end = new Date(pocket.value.timeline).getTime()
+  const now = Date.now()
+  const total = end - start
+  if (total <= 0) return 1
+  return Math.min(Math.max((now - start) / total, 0), 1)
+})
+
+const goalStatus = computed(() => {
+  if (expectedProgress.value == null || !pocket.value?.target_amount) return null
+  const actual = usdValue.value / pocket.value.target_amount
+  const diff = actual - expectedProgress.value
+  if (diff > 0.05) return { label: 'Ahead', color: 'text-primary', bg: 'bg-primary/10' }
+  if (diff < -0.05) return { label: 'Behind', color: 'text-red-500', bg: 'bg-red-500/10' }
+  return { label: 'On track', color: 'text-blue-500', bg: 'bg-blue-500/10' }
+})
+
+// ---- Feature 2: Confidence indicators ----
+const tvlRaw = computed(() => profileStore.getStrategyTvl(pocket.value?.strategy_key ?? ''))
+const apyDetails = computed(() => profileStore.getStrategyApyDetails(pocket.value?.strategy_key ?? ''))
+
+// TVL is in asset terms (e.g. 7043 ETH), multiply by asset price to get USD
+const tvlUsd = computed(() => {
+  if (!tvlRaw.value) return null
+  const num = parseFloat(tvlRaw.value)
+  if (isNaN(num)) return null
+  return num * assetPrice.value
+})
+
+const apyStability = computed(() => {
+  const d = apyDetails.value
+  if (!d) return null
+  const vals = [d['1d'], d['7d'], d['30d']].filter(Boolean).map(Number).filter(v => !isNaN(v))
+  if (vals.length < 2) return null
+  const min = Math.min(...vals)
+  const max = Math.max(...vals)
+  const avg = vals.reduce((a, b) => a + b, 0) / vals.length
+  if (avg === 0) return null
+  return (max - min) / avg > 0.3 ? 'Volatile' : 'Stable'
+})
+
+function formatTvl(value: number | null): string {
+  if (value == null || value === 0) return '—'
+  if (value >= 1_000_000_000) return '$' + (value / 1_000_000_000).toFixed(1) + 'B'
+  if (value >= 1_000_000) return '$' + (value / 1_000_000).toFixed(1) + 'M'
+  if (value >= 1_000) return '$' + (value / 1_000).toFixed(0) + 'K'
+  return '$' + value.toFixed(0)
+}
+
+// ---- Feature 3: Earnings breakdown ----
+const principal = computed(() => {
+  if (history.value.length === 0) return 0
+  let total = 0
+  for (const tx of history.value) {
+    const amt = parseFloat(tx.amount)
+    if (isNaN(amt)) continue
+    if (tx.type === 'deposit') total += amt
+    else total -= amt
+  }
+  return Math.max(total, 0)
+})
+
+const yieldEarned = computed(() => {
+  if (assetValue.value === 0 || principal.value === 0) return 0
+  return Math.max(assetValue.value - principal.value, 0)
+})
+
+const yieldPercentContribution = computed(() => {
+  if (assetValue.value === 0) return 0
+  return (yieldEarned.value / assetValue.value) * 100
+})
+
+const estimatedOneYearValue = computed(() => {
+  if (assetValue.value === 0 || !pocket.value) return 0
+  const apy = parseFloat(profileStore.getStrategyApy(pocket.value.strategy_key) ?? '0')
+  if (isNaN(apy) || apy === 0) return assetValue.value
+  return assetValue.value * (1 + apy / 100)
+})
+
+// ---- Feature 4: Strategy switch simulation ----
+const alternativeStrategies = computed(() =>
+  STRATEGY_LIST.filter(s => s.key !== pocket.value?.strategy_key),
+)
+
+const strategySimulations = computed(() => {
+  if (usdValue.value === 0 || !pocket.value) return []
+  const currentApy = parseFloat(profileStore.getStrategyApy(pocket.value.strategy_key) ?? '0')
+  const currentProjected = usdValue.value * (1 + (isNaN(currentApy) ? 0 : currentApy) / 100)
+
+  return alternativeStrategies.value.map(s => {
+    const altApy = parseFloat(profileStore.getStrategyApy(s.key) ?? '0')
+    const projectedUsd = usdValue.value * (1 + (isNaN(altApy) ? 0 : altApy) / 100)
+    return {
+      strategy: s,
+      apy: isNaN(altApy) ? 0 : altApy,
+      projectedUsd,
+      diffUsd: projectedUsd - currentProjected,
+    }
+  })
 })
 
 function displayUsd(value: number): string {
@@ -218,7 +250,7 @@ function formatTxDate(timestamp: number): string {
 }
 
 const TX_TYPE_CONFIG: Record<string, { label: string; icon: string; color: string }> = {
-  deposit: { label: 'Deposit', icon: 'lucide:arrow-down-to-line', color: 'text-emerald-500' },
+  deposit: { label: 'Deposit', icon: 'lucide:arrow-down-to-line', color: 'text-primary' },
   withdraw: { label: 'Withdraw', icon: 'lucide:arrow-up-from-line', color: 'text-orange-500' },
   redeem: { label: 'Redeem', icon: 'lucide:arrow-up-from-line', color: 'text-orange-500' },
 }
@@ -230,19 +262,14 @@ function handleSaved() {
   profileStore.refreshPockets()
 }
 
-// ---- Fetch all data ----
-async function loadAll() {
-  await Promise.all([fetchPosition(), fetchPrice(), fetchSnapshot(), fetchPerformance(), fetchHistory()])
-}
-
+// ---- Fetch history on load ----
 watch([pocket, address], () => {
-  if (pocket.value && address.value) loadAll()
+  if (pocket.value && address.value) fetchHistory()
 }, { immediate: true })
 
-// Redirect if not connected or pocket not found
-watch([isConnected, pocket], () => {
-  if (!isConnected.value) navigateTo('/app')
-  // Give pockets time to load from store before redirecting
+// Redirect if not connected
+watch(isConnected, (connected) => {
+  if (!connected) navigateTo('/app')
 }, { immediate: true })
 </script>
 
@@ -250,7 +277,7 @@ watch([isConnected, pocket], () => {
   <div class="min-h-screen bg-background">
     <!-- Header -->
     <header class="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b">
-      <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center gap-3">
+      <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center gap-3">
         <Button variant="ghost" size="sm" class="h-8 w-8 p-0" @click="navigateTo('/app')">
           <Icon name="lucide:arrow-left" class="w-4 h-4" />
         </Button>
@@ -269,39 +296,48 @@ watch([isConnected, pocket], () => {
       <Icon name="lucide:loader-2" class="w-6 h-6 animate-spin text-muted-foreground" />
     </div>
 
-    <main v-else class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <main v-else class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
       <!-- Hero: Current value -->
-      <div class="text-center mb-8">
+      <div class="text-center lg:text-left mb-8">
         <p class="text-sm text-muted-foreground mb-1">Current value</p>
-        <h2 class="text-4xl font-bold tracking-tight mb-1">{{ displayUsd(usdValue) }}</h2>
-        <p class="text-sm text-muted-foreground">
-          {{ currentValueFormatted }} {{ strategy?.assetLabel }}
-        </p>
+        <template v-if="loadingPositions">
+          <Skeleton class="h-10 w-40 mx-auto lg:mx-0 mb-1" />
+          <Skeleton class="h-4 w-32 mx-auto lg:mx-0" />
+        </template>
+        <template v-else>
+          <h2 class="text-4xl font-bold tracking-tight mb-1">{{ displayUsd(usdValue) }}</h2>
+          <p class="text-sm text-muted-foreground">
+            {{ currentValueFormatted }} {{ strategy?.assetLabel }}
+          </p>
+        </template>
       </div>
 
       <!-- Stats row -->
-      <div class="grid grid-cols-3 gap-3 mb-6">
+      <div class="grid grid-cols-3 gap-3 lg:gap-4 mb-6">
         <Card>
-          <CardContent class="p-4 text-center">
+          <CardContent class="p-4 lg:p-5 text-center">
             <p class="text-xs text-muted-foreground mb-1">APY</p>
-            <p class="text-lg font-semibold">{{ apyFormatted || '—' }}</p>
+            <Skeleton v-if="loadingPositions" class="h-6 w-16 mx-auto" />
+            <p v-else class="text-lg lg:text-xl font-semibold">{{ apyFormatted || '—' }}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent class="p-4 text-center">
+          <CardContent class="p-4 lg:p-5 text-center">
             <p class="text-xs text-muted-foreground mb-1">Profit</p>
+            <Skeleton v-if="loadingPositions" class="h-6 w-20 mx-auto" />
             <p
-              class="text-lg font-semibold"
-              :class="profitFormatted && parseFloat(performance?.unrealized.formatted || '0') >= 0 ? 'text-emerald-500' : 'text-red-500'"
+              v-else
+              class="text-lg lg:text-xl font-semibold"
+              :class="profitPositive ? 'text-primary' : 'text-red-500'"
             >
-              {{ profitFormatted ? `${profitFormatted} ${strategy?.assetSymbol}` : '—' }}
+              {{ profitFormatted || '—' }}
             </p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent class="p-4 text-center">
+          <CardContent class="p-4 lg:p-5 text-center">
             <p class="text-xs text-muted-foreground mb-1">Strategy</p>
-            <p class="text-lg font-semibold">
+            <p class="text-lg lg:text-xl font-semibold">
               {{ STRATEGY_LABELS[pocket.strategy_key] || pocket.strategy_key }}
             </p>
             <p class="text-xs" :class="RISK_LABELS[pocket.strategy_key]?.color">
@@ -311,88 +347,298 @@ watch([isConnected, pocket], () => {
         </Card>
       </div>
 
-      <!-- Timeline + Progress -->
-      <Card v-if="pocket.target_amount || pocket.timeline" class="mb-6">
-        <CardContent class="p-5">
-          <div class="flex items-center justify-between mb-3">
-            <div>
-              <p class="text-sm font-medium">Goal</p>
-              <p v-if="pocket.target_amount" class="text-xs text-muted-foreground">
-                {{ displayUsd(usdValue) }} of {{ displayUsd(pocket.target_amount) }}
-              </p>
-            </div>
-            <div v-if="timelineDisplay" class="text-right">
-              <p class="text-sm font-medium">{{ timelineDisplay.date }}</p>
-              <p
-                class="text-xs"
-                :class="timelineDisplay.overdue ? 'text-red-500' : 'text-muted-foreground'"
-              >
-                {{ timelineDisplay.remaining }}
-              </p>
-            </div>
-          </div>
-          <div v-if="pocket.target_amount" class="w-full">
-            <div class="h-3 rounded-full bg-muted overflow-hidden">
-              <div
-                class="h-full rounded-full transition-all duration-500"
-                :class="{
-                  'bg-emerald-500': pocket.strategy_key === 'conservative',
-                  'bg-blue-500': pocket.strategy_key === 'balanced',
-                  'bg-violet-500': pocket.strategy_key === 'aggressive',
-                }"
-                :style="{ width: `${progress}%` }"
-              />
-            </div>
-            <p class="text-xs text-muted-foreground mt-1.5 text-center">{{ progress }}% complete</p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <!-- Transaction history -->
-      <div class="mb-6">
-        <h3 class="text-sm font-semibold mb-3">Transaction History</h3>
-
-        <div v-if="loadingHistory" class="flex items-center justify-center py-8">
-          <Icon name="lucide:loader-2" class="w-5 h-5 animate-spin text-muted-foreground" />
-        </div>
-
-        <div v-else-if="history.length === 0" class="text-center py-8">
-          <p class="text-sm text-muted-foreground">No transactions yet</p>
-        </div>
-
-        <div v-else class="space-y-2">
-          <Card v-for="(tx, i) in history" :key="i">
-            <CardContent class="p-4 flex items-center gap-3">
-              <div
-                class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-                :class="tx.type === 'deposit' ? 'bg-emerald-500/10' : 'bg-orange-500/10'"
-              >
-                <Icon
-                  :name="TX_TYPE_CONFIG[tx.type]?.icon || 'lucide:circle'"
-                  class="w-4 h-4"
-                  :class="TX_TYPE_CONFIG[tx.type]?.color"
-                />
-              </div>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium">{{ TX_TYPE_CONFIG[tx.type]?.label || tx.type }}</p>
-                <p class="text-xs text-muted-foreground">{{ formatTxDate(tx.timestamp) }}</p>
-              </div>
-              <div class="text-right shrink-0">
-                <p class="text-sm font-medium font-mono">
-                  {{ tx.type === 'deposit' ? '+' : '-' }}{{ tx.amount }} {{ strategy?.assetSymbol }}
-                </p>
-                <a
-                  :href="`https://basescan.org/tx/${tx.txHash}`"
-                  target="_blank"
-                  class="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  @click.stop
-                >
-                  View tx
-                  <Icon name="lucide:external-link" class="w-3 h-3 inline ml-0.5" />
-                </a>
+      <!-- Two-column layout on desktop -->
+      <div class="lg:grid lg:grid-cols-5 lg:gap-6">
+        <!-- Left column: Analytics -->
+        <div class="lg:col-span-3">
+          <!-- Confidence Indicators -->
+          <Card class="mb-6">
+            <CardContent class="p-5">
+              <h3 class="text-sm font-semibold mb-3">Vault Confidence</h3>
+              <div class="grid grid-cols-2 gap-3">
+                <div class="flex items-center gap-2.5 p-3 rounded-xl bg-muted/50">
+                  <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <Icon name="lucide:vault" class="w-4 h-4 text-primary" />
+                  </div>
+                  <div class="min-w-0">
+                    <p class="text-[11px] text-muted-foreground">TVL</p>
+                    <Skeleton v-if="loadingPositions" class="h-4 w-14 mt-0.5" />
+                    <p v-else class="text-sm font-semibold truncate">{{ formatTvl(tvlUsd) }}</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2.5 p-3 rounded-xl bg-muted/50">
+                  <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                    <Icon name="lucide:activity" class="w-4 h-4 text-blue-500" />
+                  </div>
+                  <div class="min-w-0">
+                    <p class="text-[11px] text-muted-foreground">APY Stability</p>
+                    <Skeleton v-if="loadingPositions" class="h-4 w-14 mt-0.5" />
+                    <p
+                      v-else
+                      class="text-sm font-semibold"
+                      :class="apyStability === 'Stable' ? 'text-primary' : apyStability === 'Volatile' ? 'text-amber-500' : ''"
+                    >
+                      {{ apyStability || '—' }}
+                    </p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2.5 p-3 rounded-xl bg-muted/50">
+                  <div class="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
+                    <Icon name="lucide:link" class="w-4 h-4 text-violet-500" />
+                  </div>
+                  <div>
+                    <p class="text-[11px] text-muted-foreground">Chain</p>
+                    <p class="text-sm font-semibold">Base</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2.5 p-3 rounded-xl bg-muted/50">
+                  <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <Icon name="lucide:shield-check" class="w-4 h-4 text-primary" />
+                  </div>
+                  <div>
+                    <p class="text-[11px] text-muted-foreground">Contract</p>
+                    <p class="text-sm font-semibold text-primary">Verified</p>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
+
+          <!-- Earnings Breakdown -->
+          <Card v-if="!loadingPositions && !loadingHistory && assetValue > 0" class="mb-6">
+            <CardContent class="p-5">
+              <h3 class="text-sm font-semibold mb-3">Earnings Breakdown</h3>
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div class="w-2 h-2 rounded-full bg-muted-foreground" />
+                    <p class="text-sm text-muted-foreground">Principal deposited</p>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-sm font-medium font-mono">{{ principal.toLocaleString('en-US', { maximumFractionDigits: 6 }) }} {{ strategy?.assetSymbol }}</p>
+                    <p class="text-[11px] text-muted-foreground">{{ displayUsd(principal * assetPrice) }}</p>
+                  </div>
+                </div>
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div class="w-2 h-2 rounded-full bg-primary" />
+                    <p class="text-sm text-muted-foreground">Yield earned</p>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-sm font-medium font-mono text-primary">+{{ yieldEarned.toLocaleString('en-US', { maximumFractionDigits: 6 }) }} {{ strategy?.assetSymbol }}</p>
+                    <p class="text-[11px] text-muted-foreground">{{ displayUsd(yieldEarned * assetPrice) }}</p>
+                  </div>
+                </div>
+                <div class="h-px bg-border" />
+                <div class="flex items-center justify-between">
+                  <p class="text-sm text-muted-foreground">Yield contribution</p>
+                  <p class="text-sm font-semibold">{{ yieldPercentContribution.toFixed(1) }}%</p>
+                </div>
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-1.5">
+                    <Icon name="lucide:trending-up" class="w-3.5 h-3.5 text-muted-foreground" />
+                    <p class="text-sm text-muted-foreground">Est. 1-year value</p>
+                  </div>
+                  <p class="text-sm font-semibold">{{ displayUsd(estimatedOneYearValue * assetPrice) }}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <!-- Strategy Switch Simulation -->
+          <Card v-if="!loadingPositions && usdValue > 0 && strategySimulations.length > 0" class="mb-6">
+            <CardContent class="p-5">
+              <h3 class="text-sm font-semibold mb-1">What if I switched?</h3>
+              <p class="text-xs text-muted-foreground mb-3">Projected value after 1 year with {{ displayUsd(usdValue) }} invested</p>
+              <div class="grid grid-cols-2 gap-3">
+                <div
+                  v-for="sim in strategySimulations"
+                  :key="sim.strategy.key"
+                  class="p-4 rounded-xl border bg-card"
+                >
+                  <div class="flex items-center gap-2 mb-2">
+                    <div
+                      class="w-7 h-7 rounded-lg flex items-center justify-center"
+                      :class="{
+                        'bg-emerald-500/10': sim.strategy.key === 'conservative',
+                        'bg-blue-500/10': sim.strategy.key === 'balanced',
+                        'bg-violet-500/10': sim.strategy.key === 'aggressive',
+                      }"
+                    >
+                      <Icon
+                        :name="sim.strategy.icon"
+                        class="w-3.5 h-3.5"
+                        :class="{
+                          'text-emerald-500': sim.strategy.key === 'conservative',
+                          'text-blue-500': sim.strategy.key === 'balanced',
+                          'text-violet-500': sim.strategy.key === 'aggressive',
+                        }"
+                      />
+                    </div>
+                    <div>
+                      <p class="text-xs font-medium">{{ sim.strategy.label }}</p>
+                      <p class="text-[11px] text-muted-foreground">{{ sim.apy.toFixed(2) }}% APY</p>
+                    </div>
+                  </div>
+                  <p class="text-base font-bold">{{ displayUsd(sim.projectedUsd) }}</p>
+                  <p
+                    class="text-xs font-medium"
+                    :class="sim.diffUsd >= 0 ? 'text-primary' : 'text-red-500'"
+                  >
+                    {{ sim.diffUsd >= 0 ? '+' : '' }}{{ displayUsd(Math.abs(sim.diffUsd)) }}
+                    {{ sim.diffUsd >= 0 ? 'more' : 'less' }}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <!-- Right column: Goal + History -->
+        <div class="lg:col-span-2">
+          <!-- Goal: Circular Progress Ring -->
+          <Card v-if="pocket.target_amount || pocket.timeline" class="mb-6">
+            <CardContent class="p-5">
+              <div class="flex items-center justify-between mb-3">
+                <div>
+                  <p class="text-sm font-medium">Goal</p>
+                  <Skeleton v-if="loadingPositions && pocket.target_amount" class="h-3.5 w-28 mt-0.5" />
+                  <p v-else-if="pocket.target_amount" class="text-xs text-muted-foreground">
+                    {{ displayUsd(usdValue) }} of {{ displayUsd(pocket.target_amount) }}
+                  </p>
+                </div>
+                <Badge
+                  v-if="goalStatus && !loadingPositions"
+                  variant="outline"
+                  class="text-xs"
+                  :class="[goalStatus.color, goalStatus.bg]"
+                >
+                  {{ goalStatus.label }}
+                </Badge>
+              </div>
+              <div v-if="pocket.target_amount" class="flex flex-col items-center gap-4">
+                <!-- SVG Ring -->
+                <div class="relative">
+                  <svg width="120" height="120" viewBox="0 0 100 100">
+                    <circle
+                      cx="50" cy="50" r="42"
+                      fill="none"
+                      stroke="currentColor"
+                      class="text-muted"
+                      stroke-width="6"
+                    />
+                    <circle
+                      v-if="!loadingPositions"
+                      cx="50" cy="50" r="42"
+                      fill="none"
+                      stroke-width="6"
+                      stroke-linecap="round"
+                      class="transition-all duration-700"
+                      :class="{
+                        'stroke-emerald-500': pocket.strategy_key === 'conservative',
+                        'stroke-blue-500': pocket.strategy_key === 'balanced',
+                        'stroke-violet-500': pocket.strategy_key === 'aggressive',
+                      }"
+                      :stroke-dasharray="CIRCUMFERENCE"
+                      :stroke-dashoffset="CIRCUMFERENCE - (CIRCUMFERENCE * progress / 100)"
+                      transform="rotate(-90 50 50)"
+                    />
+                  </svg>
+                  <div class="absolute inset-0 flex items-center justify-center">
+                    <Skeleton v-if="loadingPositions" class="h-5 w-10" />
+                    <span v-else class="text-xl font-bold">{{ progress }}%</span>
+                  </div>
+                </div>
+                <!-- Details -->
+                <div class="w-full space-y-1.5">
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-foreground">Saved</span>
+                    <Skeleton v-if="loadingPositions" class="h-4 w-16" />
+                    <span v-else class="font-medium">{{ displayUsd(usdValue) }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-foreground">Target</span>
+                    <span class="font-medium">{{ displayUsd(pocket.target_amount) }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-foreground">Remaining</span>
+                    <Skeleton v-if="loadingPositions" class="h-4 w-16" />
+                    <span v-else class="font-medium">{{ displayUsd(Math.max(pocket.target_amount - usdValue, 0)) }}</span>
+                  </div>
+                </div>
+              </div>
+              <div v-if="timelineDisplay" class="mt-3 pt-3 border-t flex items-center justify-between">
+                <p class="text-xs text-muted-foreground">Timeline</p>
+                <div class="text-right">
+                  <p class="text-xs font-medium">{{ timelineDisplay.date }}</p>
+                  <p
+                    class="text-[11px]"
+                    :class="timelineDisplay.overdue ? 'text-red-500' : 'text-muted-foreground'"
+                  >
+                    {{ timelineDisplay.remaining }}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <!-- Transaction history -->
+          <div class="mb-6">
+            <h3 class="text-sm font-semibold mb-3">Transaction History</h3>
+
+            <div v-if="loadingHistory" class="space-y-2">
+              <div v-for="i in 3" :key="i" class="flex items-center gap-3 p-4">
+                <Skeleton class="w-9 h-9 rounded-lg shrink-0" />
+                <div class="flex-1">
+                  <Skeleton class="h-4 w-20 mb-1.5" />
+                  <Skeleton class="h-3 w-32" />
+                </div>
+                <div class="text-right">
+                  <Skeleton class="h-4 w-24 mb-1.5 ml-auto" />
+                  <Skeleton class="h-3 w-14 ml-auto" />
+                </div>
+              </div>
+            </div>
+
+            <div v-else-if="history.length === 0" class="text-center py-8">
+              <p class="text-sm text-muted-foreground">No transactions yet</p>
+            </div>
+
+            <div v-else class="space-y-2">
+              <Card v-for="(tx, i) in history" :key="i">
+                <CardContent class="p-4 flex items-center gap-3">
+                  <div
+                    class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                    :class="tx.type === 'deposit' ? 'bg-primary/10' : 'bg-orange-500/10'"
+                  >
+                    <Icon
+                      :name="TX_TYPE_CONFIG[tx.type]?.icon || 'lucide:circle'"
+                      class="w-4 h-4"
+                      :class="TX_TYPE_CONFIG[tx.type]?.color"
+                    />
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium">{{ TX_TYPE_CONFIG[tx.type]?.label || tx.type }}</p>
+                    <p class="text-xs text-muted-foreground">{{ formatTxDate(tx.timestamp) }}</p>
+                  </div>
+                  <div class="text-right shrink-0">
+                    <p class="text-sm font-medium font-mono">
+                      {{ tx.type === 'deposit' ? '+' : '-' }}{{ tx.amount }} {{ strategy?.assetSymbol }}
+                    </p>
+                    <a
+                      :href="`https://basescan.org/tx/${tx.txHash}`"
+                      target="_blank"
+                      class="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      @click.stop
+                    >
+                      View tx
+                      <Icon name="lucide:external-link" class="w-3 h-3 inline ml-0.5" />
+                    </a>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </div>
       </div>
     </main>

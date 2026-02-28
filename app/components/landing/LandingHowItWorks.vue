@@ -45,7 +45,7 @@ const steps = [
   >
     <!-- Background glow -->
     <div class="absolute inset-0 pointer-events-none" aria-hidden="true">
-      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-200 h-100 rounded-full bg-green-500/5 blur-[150px]" />
+      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-200 h-100 rounded-full bg-primary/5 blur-[150px]" />
     </div>
 
     <div class="relative max-w-6xl mx-auto px-5 sm:px-6 lg:px-8">
@@ -54,7 +54,7 @@ const steps = [
         class="text-center mb-16 transition-all duration-700 ease-out"
         :class="visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'"
       >
-        <p class="text-xs font-semibold text-green-400 uppercase tracking-[0.2em] mb-3">
+        <p class="text-xs font-semibold text-primary uppercase tracking-[0.2em] mb-3">
           How It Works
         </p>
         <h2 class="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-[-0.03em]">
@@ -78,16 +78,16 @@ const steps = [
           <div class="relative z-10 mx-auto mb-4">
             <div
               class="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto
-                     bg-green-500/10 border border-green-500/20
-                     transition-all duration-500 group-hover:scale-105 group-hover:shadow-lg group-hover:shadow-green-500/10"
+                     bg-primary/10 border border-primary/20
+                     transition-all duration-500 group-hover:scale-105 group-hover:shadow-lg group-hover:shadow-primary/10"
             >
-              <Icon :name="step.icon" class="w-6 h-6 text-green-400" />
+              <Icon :name="step.icon" class="w-6 h-6 text-primary" />
             </div>
             <!-- Step number -->
             <span
               class="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full
                      text-[10px] font-bold flex items-center justify-center
-                     bg-green-500 text-white shadow-lg shadow-green-500/30
+                     bg-primary text-white shadow-lg shadow-primary/30
                      transition-transform duration-500 group-hover:scale-110"
             >
               {{ i + 1 }}
@@ -101,7 +101,7 @@ const steps = [
 
           <!-- Bottom accent line -->
           <div
-            class="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-0 rounded-full bg-green-500/50
+            class="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-0 rounded-full bg-primary/50
                    transition-all duration-500 group-hover:w-12"
           />
         </div>

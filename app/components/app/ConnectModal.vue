@@ -11,7 +11,7 @@ defineEmits<{
   <Dialog v-model:open="open">
     <DialogContent class="sm:max-w-90 p-0 gap-0 overflow-hidden">
       <div class="px-6 pt-6 pb-4 text-center">
-        <div class="w-12 h-12 rounded-2xl bg-green-500 flex items-center justify-center mx-auto mb-3">
+        <div class="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-3">
           <Icon name="lucide:lock-keyhole" class="w-6 h-6 text-white" />
         </div>
         <DialogHeader class="space-y-1">
@@ -25,10 +25,10 @@ defineEmits<{
       <div class="px-6 pb-6 space-y-2">
         <button
           class="w-full flex items-center gap-3 p-3.5 rounded-xl bg-muted/50 border border-border
-                 hover:bg-muted hover:border-green-500/30 transition-all active:scale-[0.98] group"
+                 hover:bg-muted hover:border-primary/30 transition-all active:scale-[0.98] group"
           @click="$emit('wallet')"
         >
-          <div class="w-9 h-9 rounded-lg bg-background border border-border flex items-center justify-center group-hover:border-green-500/30">
+          <div class="w-9 h-9 rounded-lg bg-background border border-border flex items-center justify-center group-hover:border-primary/30">
             <Icon name="lucide:wallet" class="w-4.5 h-4.5 text-foreground" />
           </div>
           <div class="text-left flex-1">

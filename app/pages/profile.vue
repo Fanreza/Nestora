@@ -51,8 +51,8 @@ function truncate(addr: string) {
       <template v-if="isConnected && address">
         <!-- Avatar & Identity -->
         <div class="flex flex-col items-center mb-8">
-          <div class="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mb-4">
-            <Icon name="lucide:user" class="w-10 h-10 text-green-500" />
+          <div class="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+            <Icon name="lucide:user" class="w-10 h-10 text-primary" />
           </div>
           <p class="text-lg font-semibold">
             {{ profileStore.displayName(address) }}
@@ -100,7 +100,7 @@ function truncate(addr: string) {
                     class="flex-1"
                     @keyup.enter="saveName"
                   />
-                  <Button size="sm" class="bg-green-500 text-white hover:bg-green-600" @click="saveName">Save</Button>
+                  <Button size="sm" class="bg-primary text-primary-foreground hover:bg-primary/90" @click="saveName">Save</Button>
                   <Button size="sm" variant="ghost" @click="editingName = false">
                     <Icon name="lucide:x" class="w-4 h-4" />
                   </Button>
