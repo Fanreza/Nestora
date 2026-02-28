@@ -20,16 +20,32 @@
 
 			<!-- Headline -->
 			<h1 class="text-[2.75rem] sm:text-5xl lg:text-7xl font-bold tracking-[-0.04em] leading-[1.1] animate-fade-up [animation-delay:100ms]">
-				Your money should
+				What are you
 				<br />
-				<span class="text-primary">work harder</span>
+				<span class="text-primary">saving for?</span>
 			</h1>
 
 			<!-- Subtitle -->
-			<p class="mt-6 sm:mt-8 text-base sm:text-lg lg:text-xl text-muted-foreground max-w-xl mx-auto leading-relaxed animate-fade-up [animation-delay:200ms]">Pick a savings plan. Earn interest automatically. You stay in control of your money at all times.</p>
+			<p class="mt-6 sm:mt-8 text-base sm:text-lg lg:text-xl text-muted-foreground max-w-xl mx-auto leading-relaxed animate-fade-up [animation-delay:200ms]">
+				A vacation. A rainy day. A better future.
+				<br class="hidden sm:block" />
+				Whatever your goal, we help your money grow while you sleep.
+			</p>
+
+			<!-- Goal pills -->
+			<div class="flex flex-wrap justify-center gap-2 mt-8 animate-fade-up [animation-delay:280ms]">
+				<span
+					v-for="(goal, i) in goals"
+					:key="goal.label"
+					class="px-4 py-1.5 rounded-full text-sm bg-white/5 border border-white/10 text-muted-foreground backdrop-blur-sm animate-fade-up"
+					:style="{ animationDelay: `${320 + i * 60}ms` }"
+				>
+					{{ goal.emoji }} {{ goal.label }}
+				</span>
+			</div>
 
 			<!-- CTA buttons -->
-			<div class="mt-10 sm:mt-12 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 animate-fade-up [animation-delay:350ms]">
+			<div class="mt-10 sm:mt-12 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 animate-fade-up [animation-delay:550ms]">
 				<button class="inline-flex items-center justify-center h-12 px-8 text-base font-semibold rounded-full bg-primary text-white shadow-lg shadow-primary/25 hover:bg-primary/80 hover:shadow-primary/35 active:scale-[0.98] transition-all duration-200" @click="navigateTo('/app')">
 					Start Saving
 					<Icon name="lucide:arrow-right" class="w-4 h-4 ml-2" />
@@ -43,3 +59,13 @@
 		</div>
 	</section>
 </template>
+
+<script setup lang="ts">
+const goals = [
+	{ emoji: '\u{1F3D6}\u{FE0F}', label: 'Vacation' },
+	{ emoji: '\u{1F3E0}', label: 'Dream Home' },
+	{ emoji: '\u{1F393}', label: 'Education' },
+	{ emoji: '\u{1F6E1}\u{FE0F}', label: 'Emergency Fund' },
+	{ emoji: '\u{1F680}', label: 'Freedom' },
+]
+</script>

@@ -57,7 +57,9 @@ const progress = computed(() => {
   const v = progressRaw.value
   if (v === 0) return '0'
   if (v >= 1) return Math.round(v).toString()
-  return v.toFixed(1)
+  if (v >= 0.1) return v.toFixed(1)
+  if (v >= 0.01) return v.toFixed(2)
+  return v.toFixed(3)
 })
 
 const apyFormatted = computed(() => {
@@ -104,7 +106,7 @@ function displayUsd(value: number): string {
 
 <template>
   <Card
-    class="group cursor-pointer border-transparent hover:border-primary/40 hover:shadow-lg transition-all duration-300"
+    class="group cursor-pointer border-transparent hover:border-primary/40 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300"
     @click="$emit('click')"
   >
     <CardContent class="p-5">

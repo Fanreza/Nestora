@@ -3,6 +3,11 @@ import { EnsoClient } from '@ensofinance/sdk'
 const BASE_CHAIN_ID = 8453
 
 export default defineEventHandler(async (event) => {
+  setResponseHeaders(event, {
+    'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+    'Pragma': 'no-cache',
+  })
+
   const { address } = getQuery(event) as { address: string }
   if (!address) throw createError({ statusCode: 400, message: 'Missing address' })
 

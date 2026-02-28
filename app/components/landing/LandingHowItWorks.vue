@@ -12,7 +12,7 @@ const steps = [
   {
     icon: 'lucide:target',
     title: 'Pick a plan',
-    description: 'Choose how you want your money to grow — safe and steady, balanced, or high potential.',
+    description: 'Choose how you want your money to grow. Safe and steady, balanced, or high potential.',
   },
   {
     icon: 'lucide:user-round',

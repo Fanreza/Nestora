@@ -329,6 +329,16 @@ function handleCreate() {
                 <p class="text-xs text-muted-foreground mt-3 leading-relaxed">
                   {{ RECOMMENDATION_REASONS[recommendedStrategy] }}
                 </p>
+                <div v-if="recommendedStrategy" class="mt-3 pt-3 border-t space-y-2">
+                  <div class="flex items-start gap-2">
+                    <Icon name="lucide:check-circle" class="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                    <p class="text-[11px] text-muted-foreground"><span class="font-medium text-foreground/80">Best for:</span> {{ STRATEGIES[recommendedStrategy].bestFor }}</p>
+                  </div>
+                  <div class="flex items-start gap-2">
+                    <Icon name="lucide:alert-circle" class="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                    <p class="text-[11px] text-muted-foreground"><span class="font-medium text-foreground/80">Not ideal for:</span> {{ STRATEGIES[recommendedStrategy].notIdealFor }}</p>
+                  </div>
+                </div>
               </div>
             </div>
 

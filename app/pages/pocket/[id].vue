@@ -96,7 +96,9 @@ const progress = computed(() => {
   const v = progressRaw.value
   if (v === 0) return '0'
   if (v >= 1) return Math.round(v).toString()
-  return v.toFixed(1)
+  if (v >= 0.1) return v.toFixed(1)
+  if (v >= 0.01) return v.toFixed(2)
+  return v.toFixed(3)
 })
 
 const apyFormatted = computed(() => {
@@ -262,6 +264,100 @@ const TX_TYPE_CONFIG: Record<string, { label: string; icon: string; color: strin
   redeem: { label: 'Redeem', icon: 'lucide:arrow-up-from-line', color: 'text-orange-500' },
 }
 
+// ---- Smart Insight Engine ----
+const insights = computed(() => {
+  const list: { icon: string; text: string }[] = []
+
+  // Goal progress insight
+  if (goalStatus.value?.label === 'Ahead') {
+    const ahead = Math.round((progressRaw.value / (expectedProgress.value! * 100) - 1) * 100)
+    list.push({ icon: 'lucide:trophy', text: `You're ${ahead > 0 ? ahead + '% ' : ''}ahead of your target. Keep it up!` })
+  } else if (goalStatus.value?.label === 'Behind' && pocket.value?.target_amount) {
+    const remaining = pocket.value.target_amount - usdValue.value
+    const months = pocket.value.timeline
+      ? Math.max(Math.ceil((new Date(pocket.value.timeline).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 30)), 1)
+      : 12
+    const monthly = remaining / months
+    list.push({ icon: 'lucide:target', text: `Adding ${displayUsd(monthly)}/month keeps you on track.` })
+  }
+
+  // Strategy comparison
+  if (strategySimulations.value.length > 0) {
+    const best = strategySimulations.value.reduce((a, b) => a.diffUsd > b.diffUsd ? a : b)
+    if (best.diffUsd > 1) {
+      list.push({ icon: 'lucide:arrow-right-left', text: `Switching to ${best.strategy.label} could earn you +${displayUsd(best.diffUsd)}/year.` })
+    }
+  }
+
+  // Yield insight
+  if (yieldEarned.value > 0) {
+    list.push({ icon: 'lucide:sparkles', text: `Your money has earned ${displayUsd(yieldEarned.value * assetPrice.value)} in yield so far.` })
+  }
+
+  // APY stability
+  if (apyStability.value === 'Stable') {
+    list.push({ icon: 'lucide:shield-check', text: `This vault's APY has been consistent. A sign of reliability.` })
+  }
+
+  return list.slice(0, 2)
+})
+
+// ---- Risk Simulation Mode ----
+const simulateDownturn = ref(false)
+
+const downturnScenarios = computed(() => {
+  return STRATEGY_LIST.map(s => {
+    const simulated = usdValue.value * (1 + s.downturnImpact / 100)
+    return {
+      strategy: s,
+      drop: s.downturnImpact,
+      simulatedValue: simulated,
+      isCurrent: s.key === pocket.value?.strategy_key,
+    }
+  })
+})
+
+// ---- Future Projection Timeline ----
+const projections = computed(() => {
+  if (usdValue.value === 0 || !pocket.value) return []
+  const apy = parseFloat(profileStore.getStrategyApy(pocket.value.strategy_key) ?? '0')
+  if (isNaN(apy)) return []
+  const years = [1, 2, 3]
+  return years.map(y => ({
+    year: new Date().getFullYear() + y,
+    value: usdValue.value * Math.pow(1 + apy / 100, y),
+    reachesTarget: pocket.value?.target_amount ? usdValue.value * Math.pow(1 + apy / 100, y) >= pocket.value.target_amount : false,
+  }))
+})
+
+// ---- Psychological Layer ----
+const motivation = computed(() => {
+  if (history.value.length >= 3 && yieldEarned.value > 0) {
+    return "You're building discipline. Consistency beats volatility."
+  }
+  if (history.value.length >= 1 && yieldEarned.value > 0) {
+    return 'Your money is working for you. Small deposits, big impact.'
+  }
+  if (progressRaw.value > 50) {
+    return "You're past the halfway mark. The finish line is in sight."
+  }
+  return 'Every journey starts with a single step. You\'ve already begun.'
+})
+
+// ---- Transparency Deep Dive ----
+const showVaultDetails = ref(false)
+const copiedAddress = ref(false)
+
+function copyAddress(addr: string) {
+  navigator.clipboard.writeText(addr)
+  copiedAddress.value = true
+  setTimeout(() => copiedAddress.value = false, 2000)
+}
+
+function truncateAddr(addr: string): string {
+  return addr.slice(0, 6) + '...' + addr.slice(-4)
+}
+
 // ---- Edit dialog ----
 const showEditDialog = ref(false)
 
@@ -408,6 +504,73 @@ watch(isConnected, (connected) => {
                   </div>
                 </div>
               </div>
+
+              <!-- Transparency Deep Dive -->
+              <button
+                class="w-full mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-1"
+                @click="showVaultDetails = !showVaultDetails"
+              >
+                {{ showVaultDetails ? 'Hide' : 'View' }} details
+                <Icon
+                  name="lucide:chevron-down"
+                  class="w-3.5 h-3.5 transition-transform"
+                  :class="showVaultDetails ? 'rotate-180' : ''"
+                />
+              </button>
+
+              <div v-if="showVaultDetails && strategy" class="mt-3 pt-3 border-t space-y-2.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs text-muted-foreground">Vault address</span>
+                  <button
+                    class="text-xs font-mono text-foreground hover:text-primary transition-colors flex items-center gap-1"
+                    @click.stop="copyAddress(strategy.vaultAddress)"
+                  >
+                    {{ truncateAddr(strategy.vaultAddress) }}
+                    <Icon :name="copiedAddress ? 'lucide:check' : 'lucide:copy'" class="w-3 h-3" />
+                  </button>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-xs text-muted-foreground">Asset address</span>
+                  <span class="text-xs font-mono text-foreground">{{ truncateAddr(strategy.assetAddress) }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-xs text-muted-foreground">Standard</span>
+                  <Badge variant="outline" class="text-[10px] h-5">ERC-4626</Badge>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-xs text-muted-foreground">Protocol</span>
+                  <span class="text-xs font-medium">Yo Protocol</span>
+                </div>
+                <a
+                  :href="`https://basescan.org/address/${strategy.vaultAddress}`"
+                  target="_blank"
+                  rel="noopener"
+                  class="flex items-center justify-center gap-1.5 text-xs text-primary hover:underline pt-1"
+                >
+                  View on Basescan
+                  <Icon name="lucide:external-link" class="w-3 h-3" />
+                </a>
+              </div>
+            </CardContent>
+          </Card>
+
+          <!-- Smart Insight Engine -->
+          <Card v-if="!loadingPositions && insights.length > 0" class="mb-6">
+            <CardContent class="p-5">
+              <div class="flex items-center gap-2 mb-3">
+                <Icon name="lucide:lightbulb" class="w-4 h-4 text-amber-500" />
+                <h3 class="text-sm font-semibold">Insights</h3>
+              </div>
+              <div class="space-y-2.5">
+                <div
+                  v-for="(insight, i) in insights"
+                  :key="i"
+                  class="flex items-start gap-2.5 p-3 rounded-xl bg-muted/50"
+                >
+                  <Icon :name="insight.icon" class="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+                  <p class="text-sm text-foreground/90 leading-relaxed">{{ insight.text }}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -447,6 +610,30 @@ watch(isConnected, (connected) => {
                     <p class="text-sm text-muted-foreground">Est. 1-year value</p>
                   </div>
                   <p class="text-sm font-semibold">{{ displayUsd(estimatedOneYearValue * assetPrice) }}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <!-- Why This Strategy? -->
+          <Card v-if="strategy" class="mb-6">
+            <CardContent class="p-5">
+              <h3 class="text-sm font-semibold mb-3">Why {{ strategy.label }}?</h3>
+              <p class="text-xs text-muted-foreground leading-relaxed mb-3">{{ strategy.historicalContext }}</p>
+              <div class="space-y-2.5">
+                <div class="flex items-start gap-2.5 p-3 rounded-xl bg-primary/5">
+                  <Icon name="lucide:check-circle" class="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                  <div>
+                    <p class="text-xs font-medium text-primary mb-0.5">Best for</p>
+                    <p class="text-xs text-muted-foreground">{{ strategy.bestFor }}</p>
+                  </div>
+                </div>
+                <div class="flex items-start gap-2.5 p-3 rounded-xl bg-muted/50">
+                  <Icon name="lucide:alert-circle" class="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+                  <div>
+                    <p class="text-xs font-medium mb-0.5">Not ideal for</p>
+                    <p class="text-xs text-muted-foreground">{{ strategy.notIdealFor }}</p>
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -497,6 +684,62 @@ watch(isConnected, (connected) => {
                   </p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+          <!-- Risk Simulation Mode -->
+          <Card v-if="!loadingPositions && usdValue > 0" class="mb-6">
+            <CardContent class="p-5">
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="text-sm font-semibold">Stress Test</h3>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <span class="text-xs text-muted-foreground">Simulate -20% crash</span>
+                  <button
+                    class="relative w-9 h-5 rounded-full transition-colors"
+                    :class="simulateDownturn ? 'bg-primary' : 'bg-muted'"
+                    @click="simulateDownturn = !simulateDownturn"
+                  >
+                    <span
+                      class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform"
+                      :class="simulateDownturn ? 'translate-x-4' : ''"
+                    />
+                  </button>
+                </label>
+              </div>
+
+              <div v-if="simulateDownturn" class="space-y-2">
+                <div
+                  v-for="scenario in downturnScenarios"
+                  :key="scenario.strategy.key"
+                  class="flex items-center justify-between p-3 rounded-xl border"
+                  :class="scenario.isCurrent ? 'border-primary/40 bg-primary/5' : 'bg-card'"
+                >
+                  <div class="flex items-center gap-2">
+                    <Icon
+                      :name="scenario.strategy.icon"
+                      class="w-4 h-4"
+                      :class="{
+                        'text-emerald-500': scenario.strategy.key === 'conservative',
+                        'text-blue-500': scenario.strategy.key === 'balanced',
+                        'text-violet-500': scenario.strategy.key === 'aggressive',
+                      }"
+                    />
+                    <div>
+                      <p class="text-xs font-medium">
+                        {{ scenario.strategy.label }}
+                        <span v-if="scenario.isCurrent" class="text-primary">(yours)</span>
+                      </p>
+                      <p class="text-[11px] text-muted-foreground">{{ scenario.drop }}% impact</p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-sm font-semibold">{{ displayUsd(scenario.simulatedValue) }}</p>
+                    <p class="text-[11px] text-red-500">{{ displayUsd(scenario.simulatedValue - usdValue) }}</p>
+                  </div>
+                </div>
+              </div>
+              <p v-else class="text-xs text-muted-foreground">
+                Toggle above to see how your investment would perform in a market downturn.
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -589,6 +832,45 @@ watch(isConnected, (connected) => {
             </CardContent>
           </Card>
 
+          <!-- Future Projection Timeline -->
+          <Card v-if="!loadingPositions && projections.length > 0 && usdValue > 0" class="mb-6">
+            <CardContent class="p-5">
+              <h3 class="text-sm font-semibold mb-3">Projection</h3>
+              <div class="relative pl-4">
+                <div class="absolute left-1.75 top-1 bottom-1 w-px bg-border" />
+                <div
+                  v-for="(p, i) in projections"
+                  :key="p.year"
+                  class="relative pb-4 last:pb-0"
+                >
+                  <div
+                    class="absolute -left-3.25 top-1 w-3 h-3 rounded-full border-2"
+                    :class="p.reachesTarget
+                      ? 'bg-primary border-primary'
+                      : 'bg-background border-muted-foreground/30'"
+                  />
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <p class="text-sm font-medium">{{ p.year }}</p>
+                      <p class="text-[11px] text-muted-foreground">Year {{ i + 1 }}</p>
+                    </div>
+                    <div class="text-right">
+                      <p class="text-sm font-semibold">{{ displayUsd(p.value) }}</p>
+                      <Badge
+                        v-if="p.reachesTarget"
+                        variant="outline"
+                        class="text-[10px] h-4 border-primary/30 text-primary"
+                      >
+                        Target reached
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p class="text-[11px] text-muted-foreground mt-3">Based on current APY. Actual returns may vary.</p>
+            </CardContent>
+          </Card>
+
           <!-- Transaction history -->
           <div class="mb-6">
             <div class="flex items-center justify-between mb-3">
@@ -657,6 +939,30 @@ watch(isConnected, (connected) => {
               </Card>
             </div>
           </div>
+
+          <!-- Psychological Layer -->
+          <div v-if="!loadingPositions && assetValue > 0" class="flex items-start gap-2 px-1 mb-6">
+            <Icon name="lucide:sparkles" class="w-3.5 h-3.5 text-muted-foreground/60 shrink-0 mt-0.5" />
+            <p class="text-xs text-muted-foreground/80 italic leading-relaxed">{{ motivation }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Trust footer -->
+      <div class="mt-8 pt-6 border-t border-border/50">
+        <div class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-muted-foreground/60">
+          <span class="flex items-center gap-1.5">
+            <Icon name="lucide:shield-check" class="w-3.5 h-3.5" />
+            Funds remain in your wallet
+          </span>
+          <span class="flex items-center gap-1.5">
+            <Icon name="lucide:link" class="w-3.5 h-3.5" />
+            Powered by Yo Protocol vaults
+          </span>
+          <span class="flex items-center gap-1.5">
+            <Icon name="lucide:activity" class="w-3.5 h-3.5" />
+            Returns are variable
+          </span>
         </div>
       </div>
     </main>

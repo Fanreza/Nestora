@@ -290,21 +290,53 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
     <!-- Not connected -->
     <div
       v-if="!isConnected"
-      class="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] gap-4"
+      class="relative flex flex-col items-center justify-center min-h-[calc(100vh-4rem)]"
     >
-      <img src="/logo.png" alt="Nestora" class="w-20 h-20 mb-2" />
-      <h2 class="text-xl font-semibold">Your money, growing</h2>
-      <p class="text-muted-foreground text-center text-sm max-w-65">
-        Sign in to start earning interest on your savings.
-      </p>
-      <Button
-        size="lg"
-        class="mt-6 bg-primary text-primary-foreground hover:bg-primary/90"
-        @click="showConnectModal = true"
-      >
-        Get Started
-        <Icon name="lucide:arrow-right" class="w-4 h-4 ml-2" />
-      </Button>
+      <!-- Ambient glow -->
+      <div class="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+        <div class="absolute -top-[20%] right-[-10%] w-[min(500px,70vw)] h-[min(500px,70vw)] rounded-full bg-primary/10 blur-[120px] animate-drift-1" />
+        <div class="absolute top-[40%] -left-[15%] w-[min(350px,60vw)] h-[min(350px,60vw)] rounded-full bg-primary/6 blur-[100px] animate-drift-2" />
+      </div>
+
+      <div class="relative z-10 text-center max-w-md px-6">
+        <img src="/logo.png" alt="Nestora" class="w-16 h-16 mx-auto mb-6 animate-fade-up" />
+
+        <h2 class="text-3xl font-bold tracking-tight mb-3 animate-fade-up [animation-delay:100ms]">
+          What are you
+          <br />
+          <span class="text-primary">saving for?</span>
+        </h2>
+        <p class="text-muted-foreground text-sm leading-relaxed mb-8 animate-fade-up [animation-delay:200ms]">
+          A vacation. An emergency fund. A better future.
+          <br />
+          Start growing your money today.
+        </p>
+
+        <Button
+          size="lg"
+          class="bg-primary text-primary-foreground hover:bg-primary/90 animate-fade-up [animation-delay:300ms]"
+          @click="showConnectModal = true"
+        >
+          Get Started
+          <Icon name="lucide:arrow-right" class="w-4 h-4 ml-2" />
+        </Button>
+
+        <!-- Trust strip -->
+        <div class="flex items-center justify-center gap-6 mt-10 animate-fade-up [animation-delay:400ms]">
+          <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Icon name="lucide:shield-check" class="w-3.5 h-3.5" />
+            Non-custodial
+          </div>
+          <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Icon name="lucide:eye" class="w-3.5 h-3.5" />
+            Fully transparent
+          </div>
+          <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Icon name="lucide:door-open" class="w-3.5 h-3.5" />
+            Withdraw anytime
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Connected: Pocket Dashboard -->
@@ -401,6 +433,24 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
           @withdraw="openDepositDialog(pocket, 'withdraw')"
           @delete="requestDeletePocket(pocket)"
         />
+      </div>
+
+      <!-- Trust footer -->
+      <div class="mt-12 pt-6 border-t border-border/50">
+        <div class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-muted-foreground/60">
+          <span class="flex items-center gap-1.5">
+            <Icon name="lucide:shield-check" class="w-3.5 h-3.5" />
+            Funds remain in your wallet
+          </span>
+          <span class="flex items-center gap-1.5">
+            <Icon name="lucide:link" class="w-3.5 h-3.5" />
+            Powered by Yo Protocol vaults
+          </span>
+          <span class="flex items-center gap-1.5">
+            <Icon name="lucide:activity" class="w-3.5 h-3.5" />
+            Returns are variable
+          </span>
+        </div>
       </div>
     </main>
 

@@ -591,6 +591,25 @@ defineExpose({ openFor })
           Finding best route...
         </div>
 
+        <!-- Confetti on success -->
+        <div v-if="txState === 'confirmed'" class="relative flex justify-center -mb-2">
+          <div class="absolute inset-x-0 flex justify-center pointer-events-none">
+            <span
+              v-for="i in 12"
+              :key="i"
+              class="absolute w-2 h-2 rounded-full animate-confetti"
+              :class="[
+                ['bg-primary', 'bg-emerald-400', 'bg-blue-400', 'bg-violet-400', 'bg-amber-400', 'bg-pink-400'][i % 6],
+              ]"
+              :style="{
+                left: `${15 + (i * 70 / 12)}%`,
+                animationDelay: `${i * 0.08}s`,
+                transform: `rotate(${i * 30}deg)`,
+              }"
+            />
+          </div>
+        </div>
+
         <!-- Action button -->
         <Button
           class="w-full h-12 text-base"
@@ -652,6 +671,12 @@ defineExpose({ openFor })
             View receipt
             <Icon name="lucide:external-link" class="w-3 h-3" />
           </a>
+        </div>
+
+        <!-- Trust micro-copy -->
+        <div class="flex items-center justify-center gap-1.5 pt-3 text-[11px] text-muted-foreground/50">
+          <Icon name="lucide:shield-check" class="w-3 h-3" />
+          Non-custodial · Verifiable on BaseScan
         </div>
       </div>
     </DialogContent>

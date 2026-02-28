@@ -154,6 +154,19 @@
     50% { transform: translate(-40px, -20px); }
     75% { transform: translate(35px, -30px); }
   }
+
+  --animate-confetti: confetti 1.5s ease-out forwards;
+  --animate-pulse-soft: pulse-soft 3s ease-in-out infinite;
+
+  @keyframes pulse-soft {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+
+  @keyframes confetti {
+    0% { opacity: 1; transform: translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateY(-80px) scale(0.5); }
+  }
 }
 
 @layer base {

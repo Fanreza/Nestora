@@ -54,7 +54,7 @@ defineEmits<{
           </div>
           <div class="text-left flex-1">
             <p class="font-medium text-sm">Email or Passkey</p>
-            <p class="text-[11px] text-muted-foreground">No wallet needed — powered by Coinbase</p>
+            <p class="text-[11px] text-muted-foreground">No wallet needed, powered by Coinbase</p>
           </div>
           <Icon name="lucide:chevron-right" class="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
         </button>

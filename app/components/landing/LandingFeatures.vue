@@ -12,7 +12,7 @@ const features = [
   {
     icon: 'lucide:target',
     title: 'Plans for every goal',
-    description: 'Pick a plan that matches your comfort level — from safe and steady to high-growth.',
+    description: 'Pick a plan that matches your comfort level. From safe and steady to high-growth.',
   },
   {
     icon: 'lucide:eye',
@@ -22,7 +22,7 @@ const features = [
   {
     icon: 'lucide:trending-up',
     title: 'Real returns',
-    description: 'Your money earns real interest from proven financial strategies — not gimmicks.',
+    description: 'Your money earns real interest from proven financial strategies. Not gimmicks.',
   },
   {
     icon: 'lucide:door-open',

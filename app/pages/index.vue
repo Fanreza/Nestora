@@ -2,7 +2,7 @@
 import { STRATEGY_LIST } from '~/config/strategies'
 
 useHead({
-  title: 'Nestora — Smart Savings on Base',
+  title: 'Nestora | Smart Savings on Base',
   meta: [
     { name: 'description', content: 'Earn yield on your savings with Nestora. Simple, non-custodial DeFi savings on Base network.' },
   ],
@@ -36,6 +36,11 @@ useHead({
         <div class="w-full h-px bg-white/6" />
 
         <LandingTrust />
+
+        <!-- Separator -->
+        <div class="w-full h-px bg-white/6" />
+
+        <LandingFAQ />
       </main>
 
       <LandingFooter />

@@ -20,6 +20,10 @@ export interface Strategy {
   decimals: number
   icon: string       // iconify icon name
   color: string      // tailwind color token
+  bestFor: string
+  notIdealFor: string
+  historicalContext: string
+  downturnImpact: number  // estimated % drop in -20% market crash
 }
 
 // ---------- Token addresses on Base (8453) ----------
@@ -51,6 +55,10 @@ export const STRATEGIES: Record<StrategyKey, Strategy> = {
     decimals: 6,
     icon: 'lucide:shield',
     color: 'emerald',
+    bestFor: 'Short-term savings, emergency funds, risk-averse savers',
+    notIdealFor: 'Those seeking high returns or long-term growth',
+    historicalContext: 'Dollar-pegged stablecoins maintain value with steady yield',
+    downturnImpact: -2,
   },
   balanced: {
     key: 'balanced',
@@ -69,6 +77,10 @@ export const STRATEGIES: Record<StrategyKey, Strategy> = {
     decimals: 8,
     icon: 'lucide:scale',
     color: 'blue',
+    bestFor: 'Long-term believers in Bitcoin, moderate risk tolerance',
+    notIdealFor: 'Short-term goals or those uncomfortable with price swings',
+    historicalContext: 'Bitcoin has shown strong long-term appreciation despite short-term volatility',
+    downturnImpact: -20,
   },
   aggressive: {
     key: 'aggressive',
@@ -87,6 +99,10 @@ export const STRATEGIES: Record<StrategyKey, Strategy> = {
     decimals: 18,
     icon: 'lucide:zap',
     color: 'violet',
+    bestFor: 'Experienced investors, long time horizons, high risk tolerance',
+    notIdealFor: 'Emergency funds or goals within 1-2 years',
+    historicalContext: 'Ethereum powers DeFi with significant growth potential and higher volatility',
+    downturnImpact: -30,
   },
 }
 
