@@ -47,11 +47,26 @@ export default defineNuxtConfig({
       meta: [
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no' },
-        { name: 'description', content: 'Smart savings on Base' },
+        { name: 'description', content: 'DeFi savings app on Base. Create pockets, set goals, earn yield. No DeFi knowledge needed.' },
+        // Open Graph
+        { property: 'og:type', content: 'website' },
+        { property: 'og:url', content: 'https://nestora.aethereal.top' },
+        { property: 'og:title', content: 'Nestora — Smart Savings on Base' },
+        { property: 'og:description', content: 'Create pockets, set goals, earn yield. Deposit any token into yield-bearing vaults. No DeFi knowledge needed.' },
+        { property: 'og:image', content: 'https://nestora.aethereal.top/logo.png' },
+        { property: 'og:site_name', content: 'Nestora' },
+        // Twitter Card
+        { name: 'twitter:card', content: 'summary_large_image' },
+        { name: 'twitter:title', content: 'Nestora — Smart Savings on Base' },
+        { name: 'twitter:description', content: 'Create pockets, set goals, earn yield. Deposit any token into yield-bearing vaults. No DeFi knowledge needed.' },
+        { name: 'twitter:image', content: 'https://nestora.aethereal.top/logo.png' },
+        // Theme
+        { name: 'theme-color', content: '#10B981' },
       ],
       link: [
         { rel: 'icon', type: 'image/png', href: '/logo.png' },
         { rel: 'apple-touch-icon', href: '/logo.png' },
+        { rel: 'canonical', href: 'https://nestora.aethereal.top' },
       ],
     },
   },
