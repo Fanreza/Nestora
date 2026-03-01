@@ -75,6 +75,14 @@ export default defineNuxtConfig({
     externals: {
       inline: ['jspdf', 'jspdf-autotable'],
     },
+    routeRules: {
+      '/**': {
+        headers: {
+          'X-Frame-Options': 'SAMEORIGIN',
+          'Content-Security-Policy': "frame-ancestors 'self' https://auth.privy.io https://*.privy.io",
+        },
+      },
+    },
   },
 
   compatibilityDate: '2025-01-01',
