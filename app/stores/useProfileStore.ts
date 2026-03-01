@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { createPublicClient, http } from 'viem'
 import { formatUnits } from 'viem'
 import { mainnet } from 'viem/chains'
-import { useAccount } from '@wagmi/vue'
+import { usePrivyAuth } from '~/composables/usePrivy'
 import type { DbUser, DbPocket, UpdatePocketInput } from '~/types/database'
 import { useUserData } from '~/composables/useUserData'
 import { useVault } from '~/composables/useVault'
@@ -235,9 +235,9 @@ export const useProfileStore = defineStore('profile', () => {
   }
 
   // ---- Auto-fetch on address change ----
-  const account = useAccount()
+  const { address: privyAddress } = usePrivyAuth()
 
-  watch(() => account.address.value, async (addr, oldAddr) => {
+  watch(() => privyAddress.value, async (addr, oldAddr) => {
     if (addr === oldAddr) return
     reset()
     if (addr) {
@@ -248,9 +248,9 @@ export const useProfileStore = defineStore('profile', () => {
 
   // Fetch positions once when pockets first load
   watch(pockets, () => {
-    if (pockets.value.length && account.address.value && !positionsFetched.value) {
+    if (pockets.value.length && privyAddress.value && !positionsFetched.value) {
       positionsFetched.value = true
-      fetchAllPositions(account.address.value)
+      fetchAllPositions(privyAddress.value)
     }
   })
 

@@ -1,11 +1,9 @@
-import { useAccount } from '@wagmi/vue'
-import { getBalance, readContract } from '@wagmi/core'
 import { erc20Abi, formatUnits } from 'viem'
-import { wagmiConfig } from '~/config/wagmi'
+import { usePrivyAuth } from '~/composables/usePrivy'
 import { STRATEGIES, type StrategyKey } from '~/config/strategies'
 
 export function useBalances() {
-  const { address } = useAccount()
+  const { address, getPublicClient } = usePrivyAuth()
 
   const ethBalance = ref<bigint>(0n)
   const usdcBalance = ref<bigint>(0n)
@@ -16,22 +14,23 @@ export function useBalances() {
     if (!address.value) return
     loading.value = true
     try {
+      const publicClient = getPublicClient()
       const [eth, usdc, cbbtc] = await Promise.all([
-        getBalance(wagmiConfig, { address: address.value }),
-        readContract(wagmiConfig, {
+        publicClient.getBalance({ address: address.value }),
+        publicClient.readContract({
           address: STRATEGIES.conservative.assetAddress,
           abi: erc20Abi,
           functionName: 'balanceOf',
           args: [address.value],
         }),
-        readContract(wagmiConfig, {
+        publicClient.readContract({
           address: STRATEGIES.balanced.assetAddress,
           abi: erc20Abi,
           functionName: 'balanceOf',
           args: [address.value],
         }),
       ])
-      ethBalance.value = eth.value
+      ethBalance.value = eth
       usdcBalance.value = usdc as bigint
       cbbtcBalance.value = cbbtc as bigint
     } catch (e) {
@@ -69,7 +68,7 @@ export function useBalances() {
   onMounted(() => {
     interval = setInterval(() => {
       if (address.value) fetchBalances()
-    }, 15_000)
+    }, 30_000)
   })
   onUnmounted(() => {
     if (interval) clearInterval(interval)

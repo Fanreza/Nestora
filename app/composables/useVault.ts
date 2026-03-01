@@ -1,20 +1,7 @@
-import { useAccount } from '@wagmi/vue'
-import { getWalletClient, getPublicClient, sendTransaction, waitForTransactionReceipt } from '@wagmi/core'
-import { wagmiConfig } from '~/config/wagmi'
+import { usePrivyAuth } from '~/composables/usePrivy'
 import type { Strategy } from '~/config/strategies'
 import { useEnso } from './useEnso'
 import { createYoClient, YO_GATEWAY_ADDRESS } from '@yo-protocol/core'
-
-async function getLowGasFees() {
-  const client = getPublicClient(wagmiConfig)
-  const block = await client!.getBlock({ blockTag: 'latest' })
-  const baseFee = block.baseFeePerGas ?? 0n
-  // Use base fee + 1 wei tip — the absolute minimum to get included
-  return {
-    maxFeePerGas: baseFee + 1n,
-    maxPriorityFeePerGas: 1n,
-  }
-}
 
 export interface VaultSnapshotResult {
   yield: {
@@ -50,25 +37,33 @@ export type TxState =
 const BASE_CHAIN_ID = 8453
 
 export function useVault() {
-  const { address } = useAccount()
+  const { address, getPublicClient, getWalletClient } = usePrivyAuth()
 
   const txState = ref<TxState>('idle')
   const txHash = ref<`0x${string}` | null>(null)
   const txError = ref('')
   const gasEstimate = ref('')
 
+  async function getLowGasFees() {
+    const publicClient = getPublicClient()
+    const block = await publicClient.getBlock({ blockTag: 'latest' })
+    const baseFee = block.baseFeePerGas ?? 0n
+    return {
+      maxFeePerGas: baseFee + 1n,
+      maxPriorityFeePerGas: 1n,
+    }
+  }
+
   // Create a Yo client with wallet for write operations
-  // Pass wagmi's publicClient so SDK and wagmi share same RPC state
   async function getYoClient() {
-    const walletClient = await getWalletClient(wagmiConfig)
-    const publicClient = getPublicClient(wagmiConfig)
-    // TODO: Replace partnerId with your own — get one at https://x.com/yield
+    const walletClient = await getWalletClient()
+    const publicClient = getPublicClient()
     return createYoClient({ chainId: BASE_CHAIN_ID, walletClient, publicClient, partnerId: 9999 })
   }
 
   // Read-only Yo client (no wallet needed)
   function getReadClient() {
-    const publicClient = getPublicClient(wagmiConfig)
+    const publicClient = getPublicClient()
     return createYoClient({ chainId: BASE_CHAIN_ID, publicClient })
   }
 
@@ -111,8 +106,6 @@ export function useVault() {
         await client.waitForTransaction(approveResult.hash)
       }
 
-      // Use prepareDeposit (encodes calldata only, no simulateContract)
-      // then send via wagmi — works with Smart Wallets & EOAs alike
       txState.value = 'awaiting_signature'
       const preparedTx = await client.prepareDeposit({
         vault: strategy.vaultAddress,
@@ -120,8 +113,9 @@ export function useVault() {
         recipient: address.value,
       })
       const gasFees = await getLowGasFees()
+      const walletClient = await getWalletClient()
 
-      const hash = await sendTransaction(wagmiConfig, {
+      const hash = await walletClient.sendTransaction({
         to: preparedTx.to as `0x${string}`,
         data: preparedTx.data as `0x${string}`,
         value: preparedTx.value,
@@ -131,7 +125,8 @@ export function useVault() {
       txHash.value = hash
       txState.value = 'pending'
 
-      const receipt = await waitForTransactionReceipt(wagmiConfig, { hash })
+      const publicClient = getPublicClient()
+      const receipt = await publicClient.waitForTransactionReceipt({ hash })
       txState.value = receipt.status === 'success' ? 'confirmed' : 'failed'
       if (receipt.status !== 'success') txError.value = 'Transaction reverted'
     } catch (e: any) {
@@ -165,7 +160,6 @@ export function useVault() {
         await client.waitForTransaction(approveResult.hash)
       }
 
-      // Use prepareRedeem + wagmi sendTransaction (Smart Wallet compatible)
       txState.value = 'awaiting_signature'
       const preparedTx = await client.prepareRedeem({
         vault: strategy.vaultAddress,
@@ -173,8 +167,9 @@ export function useVault() {
         recipient: address.value,
       })
       const gasFees = await getLowGasFees()
+      const walletClient = await getWalletClient()
 
-      const hash = await sendTransaction(wagmiConfig, {
+      const hash = await walletClient.sendTransaction({
         to: preparedTx.to as `0x${string}`,
         data: preparedTx.data as `0x${string}`,
         value: preparedTx.value,
@@ -184,8 +179,8 @@ export function useVault() {
       txHash.value = hash
       txState.value = 'pending'
 
-      // Wait for tx confirmation
-      const txReceipt = await waitForTransactionReceipt(wagmiConfig, { hash })
+      const publicClient = getPublicClient()
+      const txReceipt = await publicClient.waitForTransactionReceipt({ hash })
       if (txReceipt.status !== 'success') {
         txState.value = 'failed'
         txError.value = 'Transaction reverted'
@@ -255,25 +250,28 @@ export function useVault() {
       }
 
       // Approve token spend if not native ETH
+      const walletClient = await getWalletClient()
+      const publicClient = getPublicClient()
+
       if (tokenIn.toLowerCase() !== NATIVE_TOKEN.toLowerCase()) {
         txState.value = 'approving'
         const approval = await getApprovalTx(tokenIn, amount, address.value)
         if (approval?.tx) {
           const approveGas = await getLowGasFees()
-          const approveHash = await sendTransaction(wagmiConfig, {
+          const approveHash = await walletClient.sendTransaction({
             to: approval.tx.to as `0x${string}`,
             data: approval.tx.data as `0x${string}`,
             value: BigInt(approval.tx.value || '0'),
             ...approveGas,
           })
-          await waitForTransactionReceipt(wagmiConfig, { hash: approveHash })
+          await publicClient.waitForTransactionReceipt({ hash: approveHash })
         }
       }
 
       // Execute the zap transaction
       txState.value = 'awaiting_signature'
       const zapGas = await getLowGasFees()
-      const hash = await sendTransaction(wagmiConfig, {
+      const hash = await walletClient.sendTransaction({
         to: quote.tx.to as `0x${string}`,
         data: quote.tx.data as `0x${string}`,
         value: BigInt(quote.tx.value || '0'),
@@ -283,7 +281,7 @@ export function useVault() {
       txHash.value = hash
       txState.value = 'pending'
 
-      const receipt = await waitForTransactionReceipt(wagmiConfig, { hash })
+      const receipt = await publicClient.waitForTransactionReceipt({ hash })
       txState.value = receipt.status === 'success' ? 'confirmed' : 'failed'
       if (receipt.status !== 'success') txError.value = 'Transaction reverted'
     } catch (e: any) {

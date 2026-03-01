@@ -11,6 +11,11 @@ export default defineNuxtConfig({
     ensoApiKey: '',
     supabaseUrl: '',
     supabaseKey: '',
+    public: {
+      privyAppId: '',
+      privyClientId: '',
+      walletConnectProjectId: '',
+    },
   },
 
   modules: ['@pinia/nuxt', 'shadcn-nuxt', '@nuxt/icon', '@nuxt/fonts'],
@@ -31,7 +36,7 @@ export default defineNuxtConfig({
   vite: {
     plugins: [tailwindcss()],
     optimizeDeps: {
-      include: ['@coinbase/wallet-sdk'],
+      include: ['@coinbase/wallet-sdk', '@privy-io/js-sdk-core'],
     },
   },
 

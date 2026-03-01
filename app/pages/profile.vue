@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { useWallet } from '~/composables/useWallet'
+import { usePrivyAuth } from '~/composables/usePrivy'
 import { useProfileStore } from '~/stores/useProfileStore'
 
-const { isConnected, address, disconnect } = useWallet()
+const { isConnected, address, loginMethod, logout } = usePrivyAuth()
 const profileStore = useProfileStore()
 const { ensName, customName } = storeToRefs(profileStore)
 
@@ -25,9 +25,9 @@ function saveName() {
   editingName.value = false
 }
 
-function handleDisconnect() {
+async function handleDisconnect() {
   profileStore.reset()
-  disconnect()
+  await logout()
   navigateTo('/app')
 }
 
@@ -112,27 +112,63 @@ function truncate(addr: string) {
             </CardContent>
           </Card>
 
-          <!-- Export Wallet -->
+          <!-- Wallet Management -->
           <Card>
             <CardContent class="p-4">
-              <div class="flex items-center gap-2 mb-1">
-                <Icon name="lucide:download" class="w-4 h-4 text-muted-foreground" />
-                <p class="text-sm font-medium">Export Wallet</p>
-              </div>
-              <p class="text-xs text-muted-foreground mb-3">
-                Back up your account keys to keep them safe.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                class="w-full"
-                as="a"
-                href="https://keys.coinbase.com"
-                target="_blank"
-              >
-                <Icon name="lucide:external-link" class="w-3.5 h-3.5 mr-1.5" />
-                Manage Keys
-              </Button>
+              <!-- Coinbase Smart Wallet -->
+              <template v-if="loginMethod === 'coinbase'">
+                <div class="flex items-center gap-2 mb-1">
+                  <Icon name="simple-icons:coinbase" class="w-4 h-4 text-[#0052FF]" />
+                  <p class="text-sm font-medium">Coinbase Wallet</p>
+                </div>
+                <p class="text-xs text-muted-foreground mb-3">
+                  Back up your account keys to keep them safe.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="w-full"
+                  as="a"
+                  href="https://keys.coinbase.com"
+                  target="_blank"
+                >
+                  <Icon name="lucide:external-link" class="w-3.5 h-3.5 mr-1.5" />
+                  Manage Keys
+                </Button>
+              </template>
+
+              <!-- Privy embedded wallet (email/phone/social) -->
+              <template v-else-if="['email', 'phone', 'google', 'twitter', 'discord', 'farcaster'].includes(loginMethod || '')">
+                <div class="flex items-center gap-2 mb-1">
+                  <Icon name="lucide:shield-check" class="w-4 h-4 text-primary" />
+                  <p class="text-sm font-medium">Wallet Security</p>
+                </div>
+                <p class="text-xs text-muted-foreground mb-3">
+                  Your wallet is secured by Privy. Export or manage your keys from Privy.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="w-full"
+                  as="a"
+                  href="https://home.privy.io/"
+                  target="_blank"
+                >
+                  <Icon name="lucide:external-link" class="w-3.5 h-3.5 mr-1.5" />
+                  Manage Keys
+                </Button>
+              </template>
+
+              <!-- External wallet (MetaMask, Rabby, etc.) -->
+              <template v-else>
+                <div class="flex items-center gap-2 mb-1">
+                  <Icon name="lucide:wallet" class="w-4 h-4 text-muted-foreground" />
+                  <p class="text-sm font-medium">External Wallet</p>
+                </div>
+                <p class="text-xs text-muted-foreground">
+                  Your keys are managed by your wallet app. Export or back up through your wallet directly.
+                </p>
+              </template>
             </CardContent>
           </Card>
 

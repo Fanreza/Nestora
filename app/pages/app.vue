@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { parseUnits } from 'viem'
 import type { StrategyKey } from '~/config/strategies'
-import { useWallet } from '~/composables/useWallet'
+import { usePrivyAuth } from '~/composables/usePrivy'
 import { useBalances } from '~/composables/useBalances'
 import { useVault } from '~/composables/useVault'
 import { useEnso } from '~/composables/useEnso'
@@ -13,22 +13,9 @@ import { storeToRefs } from 'pinia'
 import { useProfileStore } from '~/stores/useProfileStore'
 
 // ---- Wallet ----
-const {
-  isConnected, address, isBase,
-  connectWallet, connectSmartAccount, switchToBase,
-} = useWallet()
+const { isConnected, address, isBase, isReady } = usePrivyAuth()
 
 const showConnectModal = ref(false)
-
-async function handleWallet() {
-  showConnectModal.value = false
-  await connectWallet()
-}
-
-async function handleSmartAccount() {
-  showConnectModal.value = false
-  await connectSmartAccount()
-}
 
 // ---- Profile Store ----
 const profileStore = useProfileStore()
@@ -126,13 +113,18 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
 
 <template>
   <div class="min-h-screen bg-background">
+    <!-- Loading -->
+    <div v-if="!isReady" class="min-h-screen flex items-center justify-center">
+      <Icon name="lucide:loader-2" class="w-6 h-6 animate-spin text-muted-foreground" />
+    </div>
+
     <!-- Header -->
     <AppHeader
+      v-else
       :is-connected="isConnected"
       :is-base="isBase"
       :display-name="profileDisplayName"
       @sign-in="showConnectModal = true"
-      @switch-network="switchToBase"
       @go-profile="navigateTo('/profile')"
     />
 
@@ -142,18 +134,7 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
     <!-- Connected: Pocket Dashboard -->
     <main v-else class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
       <!-- Alerts -->
-      <Alert v-if="!isBase" variant="destructive" class="mb-4">
-        <Icon name="lucide:alert-triangle" class="w-4 h-4" />
-        <AlertTitle>Quick setup needed</AlertTitle>
-        <AlertDescription class="flex items-center justify-between">
-          <span>We need to switch you to the right network. One tap.</span>
-          <Button size="sm" variant="destructive" @click="switchToBase">
-            Fix it
-          </Button>
-        </AlertDescription>
-      </Alert>
-
-      <Alert v-if="lowGas && isBase" class="mb-4">
+      <Alert v-if="lowGas" class="mb-4">
         <Icon name="lucide:info" class="w-4 h-4" />
         <AlertTitle>Low balance for fees</AlertTitle>
         <AlertDescription>
@@ -252,11 +233,7 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
     </main>
 
     <!-- Dialogs -->
-    <AppConnectModal
-      v-model:open="showConnectModal"
-      @wallet="handleWallet"
-      @smart-account="handleSmartAccount"
-    />
+    <AppConnectModal v-model:open="showConnectModal" />
 
     <AppCreatePocketDialog
       v-model:open="showCreateDialog"

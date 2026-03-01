@@ -2,15 +2,14 @@
 import { formatUnits } from 'viem'
 import { toPng } from 'html-to-image'
 import { STRATEGIES, STRATEGY_LIST, type StrategyKey } from '~/config/strategies'
-import { useAccount } from '@wagmi/vue'
-import { useWallet } from '~/composables/useWallet'
+import { usePrivyAuth } from '~/composables/usePrivy'
 import { storeToRefs } from 'pinia'
 import { useProfileStore } from '~/stores/useProfileStore'
 
 const route = useRoute()
 const pocketId = route.params.id as string
 
-const { isConnected } = useWallet()
+const { isConnected, isReady } = usePrivyAuth()
 const profileStore = useProfileStore()
 const { pockets, pocketPositions, pocketProfits, loadingPositions } = storeToRefs(profileStore)
 const { getTransactions } = useUserData()
@@ -495,10 +494,9 @@ watch(pocket, () => {
   if (pocket.value) fetchHistory()
 }, { immediate: true })
 
-// Redirect if disconnected (skip during wallet reconnection on reload)
-const { status: accountStatus } = useAccount()
-watch([isConnected, accountStatus], ([connected, status]) => {
-  if (!connected && status === 'disconnected') navigateTo('/app')
+// Redirect if disconnected (skip during session restoration)
+watch([isConnected, isReady], ([connected, ready]) => {
+  if (ready && !connected) navigateTo('/app')
 }, { immediate: true })
 </script>
 
