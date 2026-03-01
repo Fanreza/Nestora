@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { parseUnits } from 'viem'
-import { STRATEGIES, type StrategyKey } from '~/config/strategies'
-import type { DbPocket } from '~/types/database'
+import type { StrategyKey } from '~/config/strategies'
 import { useWallet } from '~/composables/useWallet'
 import { useBalances } from '~/composables/useBalances'
 import { useVault } from '~/composables/useVault'
-import { useEnso, type TokenBalance } from '~/composables/useEnso'
+import { useEnso } from '~/composables/useEnso'
 import { useCoinGecko } from '~/composables/useCoinGecko'
+import { useWalletTokens } from '~/composables/useWalletTokens'
+import { useDepositFlow } from '~/composables/useDepositFlow'
+import { useTransactionRecorder } from '~/composables/useTransactionRecorder'
 import { storeToRefs } from 'pinia'
 import { useProfileStore } from '~/stores/useProfileStore'
 
@@ -16,7 +18,6 @@ const {
   connectWallet, connectSmartAccount, switchToBase,
 } = useWallet()
 
-// ---- Connect Modal ----
 const showConnectModal = ref(false)
 
 async function handleWallet() {
@@ -29,7 +30,7 @@ async function handleSmartAccount() {
   await connectSmartAccount()
 }
 
-// ---- Profile Store (all position/price/APY data lives here) ----
+// ---- Profile Store ----
 const profileStore = useProfileStore()
 const {
   currentUser, pockets, loading: loadingPockets,
@@ -40,87 +41,45 @@ const {
 const profileDisplayName = computed(() =>
   address.value ? profileStore.displayName(address.value) : '',
 )
-
 const pocketCount = computed(() => pockets.value.length)
 
-// ---- Balances ----
+// ---- Balances & Vault ----
 const { ethBalance, fetchBalances, loading: loadingBalances } = useBalances()
-
-// ---- Vault ----
-const {
-  txState, txHash, txError,
-  deposit, redeem, zapDeposit,
-  reset,
-} = useVault()
-
-// ---- Enso ----
+const { txState, txHash, txError, deposit, redeem, zapDeposit, reset } = useVault()
 const { getZapQuote, getWalletBalances, NATIVE_TOKEN } = useEnso()
 const { getTokenPrices } = useCoinGecko()
 
-// ---- Transaction recording ----
-const { recordTransaction } = useUserData()
-const lastTxType = ref<'deposit' | 'withdraw' | 'redeem'>('deposit')
-const lastTxAmount = ref('')
+// ---- Wallet tokens ----
+const { walletTokens, loadingTokens, fetchWalletTokens } = useWalletTokens(
+  address, getWalletBalances, getTokenPrices,
+)
 
-watch(txState, async (s) => {
-  if (s === 'confirmed') {
-    // Record transaction to database
-    if (selectedPocket.value && txHash.value && selectedStrategy.value) {
-      await recordTransaction({
-        pocket_id: selectedPocket.value.id,
-        type: lastTxType.value,
-        amount: lastTxAmount.value,
-        asset_symbol: selectedStrategy.value.assetSymbol,
-        tx_hash: txHash.value,
-        timestamp: Math.floor(Date.now() / 1000),
-      })
-    }
-
-    fetchBalances()
-    if (address.value) profileStore.fetchAllPositions(address.value)
-    profileStore.refreshPockets()
-    setTimeout(() => {
-      showDepositDialog.value = false
-      reset()
-    }, 1500)
-  }
+// ---- Deposit / Withdraw flow ----
+const {
+  selectedPocket, showDepositDialog, zapQuote, fetchingQuote,
+  selectedStrategy, lastTxType, lastTxAmount,
+  openDepositDialog, handleDeposit, handleWithdraw,
+  handleSelectToken, handleUpdateAmount, handleChangeMode,
+} = useDepositFlow({
+  address, deposit, redeem, zapDeposit, reset,
+  getZapQuote, NATIVE_TOKEN, walletTokens, fetchWalletTokens,
+  fetchPocketPosition: (p) => profileStore.fetchPocketPosition(p),
 })
 
-// ---- Wallet tokens for deposit ----
-type WalletToken = TokenBalance & { usdPrice: number; usdValue: number; formattedBal: number }
-const walletTokens = ref<WalletToken[]>([])
-const loadingTokens = ref(false)
+const pocketPosition = computed(() => {
+  if (!selectedPocket.value) return { shares: 0n, value: 0n }
+  return pocketPositions.value[selectedPocket.value.id] || { shares: 0n, value: 0n }
+})
 
-async function fetchWalletTokens() {
-  if (!address.value) return
-  loadingTokens.value = true
-  try {
-    const balances = await getWalletBalances(address.value)
-    const nonZero = balances.filter(t => t.amount && BigInt(t.amount) > 0n)
-
-    // Fetch prices but don't filter out tokens without prices
-    let prices: Record<string, number> = {}
-    try {
-      prices = await getTokenPrices(nonZero.map(t => t.token))
-    } catch (e) {
-      console.error('[fetchWalletTokens] price fetch failed:', e)
-    }
-
-    walletTokens.value = nonZero
-      .map(t => {
-        const usdPrice = prices[t.token.toLowerCase()] ?? 0
-        const formattedBal = Number(BigInt(t.amount)) / Math.pow(10, t.decimals)
-        return { ...t, usdPrice, usdValue: formattedBal * usdPrice, formattedBal }
-      })
-      .filter(t => t.usdPrice > 0)
-      .sort((a, b) => b.usdValue - a.usdValue)
-  } catch (e) {
-    console.error('[fetchWalletTokens] failed:', e)
-    walletTokens.value = []
-  } finally {
-    loadingTokens.value = false
-  }
-}
+// ---- Transaction recording ----
+useTransactionRecorder({
+  txState, txHash, reset,
+  selectedPocket, selectedStrategy,
+  lastTxType, lastTxAmount, showDepositDialog,
+  address, fetchBalances,
+  fetchAllPositions: (addr) => profileStore.fetchAllPositions(addr),
+  refreshPockets: () => profileStore.refreshPockets(),
+})
 
 // ---- Create pocket ----
 const showCreateDialog = ref(false)
@@ -150,148 +109,15 @@ async function handleCreatePocket(payload: {
 }
 
 // ---- Delete pocket ----
+const deleteDialogRef = ref<InstanceType<typeof import('~/components/app/DeletePocketDialog.vue').default> | null>(null)
 const showDeleteConfirm = ref(false)
-const pocketToDelete = ref<DbPocket | null>(null)
-const deletingPocket = ref(false)
 
-const pocketHasFunds = computed(() => {
-  if (!pocketToDelete.value) return false
-  const pos = pocketPositions.value[pocketToDelete.value.id]
-  return pos && pos.shares > 0n
-})
-
-function requestDeletePocket(pocket: DbPocket) {
-  pocketToDelete.value = pocket
-  showDeleteConfirm.value = true
-}
-
-async function confirmDeletePocket() {
-  if (!pocketToDelete.value) return
-  deletingPocket.value = true
-  try {
-    const ok = await profileStore.deletePocket(pocketToDelete.value.id)
-    if (ok && selectedPocket.value?.id === pocketToDelete.value.id) {
-      selectedPocket.value = null
-      showDepositDialog.value = false
-    }
-  } finally {
-    deletingPocket.value = false
-    showDeleteConfirm.value = false
-    pocketToDelete.value = null
+async function handlePocketDeleted(id: string) {
+  const ok = await profileStore.deletePocket(id)
+  if (ok && selectedPocket.value?.id === id) {
+    selectedPocket.value = null
+    showDepositDialog.value = false
   }
-}
-
-// ---- Deposit / Withdraw dialog ----
-const selectedPocket = ref<DbPocket | null>(null)
-const showDepositDialog = ref(false)
-const selectedTokenIn = ref<`0x${string}` | null>(null)
-const depositAmount = ref('')
-const zapQuote = ref<import('~/composables/useEnso').ZapQuote | null>(null)
-const fetchingQuote = ref(false)
-
-const selectedStrategy = computed(() =>
-  selectedPocket.value
-    ? STRATEGIES[selectedPocket.value.strategy_key as StrategyKey]
-    : null,
-)
-
-const pocketPosition = computed(() => {
-  if (!selectedPocket.value) return { shares: 0n, value: 0n }
-  return pocketPositions.value[selectedPocket.value.id] || { shares: 0n, value: 0n }
-})
-
-function openDepositDialog(pocket: DbPocket, mode: 'deposit' | 'withdraw' = 'deposit') {
-  selectedPocket.value = pocket
-  depositAmount.value = ''
-  selectedTokenIn.value = null
-  zapQuote.value = null
-  reset()
-  showDepositDialog.value = true
-  profileStore.fetchPocketPosition(pocket)
-  if (mode === 'deposit') fetchWalletTokens()
-}
-
-// Zap quote debouncing
-const isDirectDeposit = computed(() => {
-  if (!selectedTokenIn.value || !selectedStrategy.value) return true
-  const vaultAsset = selectedStrategy.value.type === 'native'
-    ? NATIVE_TOKEN
-    : selectedStrategy.value.assetAddress
-  return selectedTokenIn.value.toLowerCase() === vaultAsset.toLowerCase()
-})
-
-let quoteTimeout: ReturnType<typeof setTimeout> | null = null
-watch([selectedTokenIn, depositAmount], () => {
-  zapQuote.value = null
-  if (quoteTimeout) clearTimeout(quoteTimeout)
-  if (!selectedTokenIn.value || !depositAmount.value || !selectedStrategy.value || !address.value) return
-  if (isDirectDeposit.value) return
-
-  const tokenBal = walletTokens.value.find(
-    t => t.token?.toLowerCase() === selectedTokenIn.value?.toLowerCase(),
-  )
-
-  quoteTimeout = setTimeout(async () => {
-    fetchingQuote.value = true
-    try {
-      const decimals = tokenBal?.decimals ?? 18
-      const amountWei = parseUnits(depositAmount.value, decimals).toString()
-      zapQuote.value = await getZapQuote(selectedTokenIn.value!, selectedStrategy.value!, amountWei, address.value!)
-    } finally {
-      fetchingQuote.value = false
-    }
-  }, 800)
-})
-
-// Handle deposit/withdraw actions from dialog
-async function handleDeposit(payload: { tokenIn: `0x${string}`; amount: string; isDirect: boolean }) {
-  const strategy = selectedStrategy.value
-  if (!strategy || !address.value || !selectedPocket.value) return
-
-  lastTxType.value = 'deposit'
-  lastTxAmount.value = payload.amount
-
-  if (payload.isDirect) {
-    const parsed = parseUnits(payload.amount, strategy.decimals)
-    if (parsed === 0n) return
-    await deposit(strategy, parsed)
-  } else if (zapQuote.value) {
-    const tokenBal = walletTokens.value.find(
-      t => t.token?.toLowerCase() === payload.tokenIn.toLowerCase(),
-    )
-    const decimals = tokenBal?.decimals ?? 18
-    const amountWei = parseUnits(payload.amount, decimals).toString()
-    await zapDeposit(strategy, payload.tokenIn, amountWei)
-  }
-}
-
-async function handleWithdraw(amount: string) {
-  const strategy = selectedStrategy.value
-  if (!strategy || !address.value || !selectedPocket.value) return
-
-  lastTxType.value = 'redeem'
-  lastTxAmount.value = amount
-
-  const parsed = parseUnits(amount, strategy.decimals)
-  if (parsed === 0n) return
-  await redeem(strategy, parsed)
-}
-
-function handleSelectToken(token: `0x${string}`) {
-  selectedTokenIn.value = token
-  depositAmount.value = ''
-  zapQuote.value = null
-}
-
-function handleUpdateAmount(amount: string) {
-  depositAmount.value = amount
-}
-
-function handleChangeMode(mode: 'deposit' | 'withdraw') {
-  depositAmount.value = ''
-  selectedTokenIn.value = null
-  zapQuote.value = null
-  if (mode === 'deposit') fetchWalletTokens()
 }
 
 // ---- Helpers ----
@@ -311,56 +137,7 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
     />
 
     <!-- Not connected -->
-    <div
-      v-if="!isConnected"
-      class="relative flex flex-col items-center justify-center min-h-[calc(100vh-4rem)]"
-    >
-      <!-- Ambient glow -->
-      <div class="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-        <div class="absolute -top-[20%] right-[-10%] w-[min(500px,70vw)] h-[min(500px,70vw)] rounded-full bg-primary/10 blur-[120px] animate-drift-1" />
-        <div class="absolute top-[40%] -left-[15%] w-[min(350px,60vw)] h-[min(350px,60vw)] rounded-full bg-primary/6 blur-[100px] animate-drift-2" />
-      </div>
-
-      <div class="relative z-10 text-center max-w-md px-6">
-        <img src="/logo.png" alt="Nestora" class="w-16 h-16 mx-auto mb-6 animate-fade-up" />
-
-        <h2 class="text-3xl font-bold tracking-tight mb-3 animate-fade-up [animation-delay:100ms]">
-          What are you
-          <br />
-          <span class="text-primary">saving for?</span>
-        </h2>
-        <p class="text-muted-foreground text-sm leading-relaxed mb-8 animate-fade-up [animation-delay:200ms]">
-          A vacation. An emergency fund. A better future.
-          <br />
-          Start growing your money today.
-        </p>
-
-        <Button
-          size="lg"
-          class="bg-primary text-primary-foreground hover:bg-primary/90 animate-fade-up [animation-delay:300ms]"
-          @click="showConnectModal = true"
-        >
-          Get Started
-          <Icon name="lucide:arrow-right" class="w-4 h-4 ml-2" />
-        </Button>
-
-        <!-- Trust strip -->
-        <div class="flex items-center justify-center gap-6 mt-10 animate-fade-up [animation-delay:400ms]">
-          <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Icon name="lucide:shield-check" class="w-3.5 h-3.5" />
-            Non-custodial
-          </div>
-          <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Icon name="lucide:eye" class="w-3.5 h-3.5" />
-            Fully transparent
-          </div>
-          <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Icon name="lucide:door-open" class="w-3.5 h-3.5" />
-            Withdraw anytime
-          </div>
-        </div>
-      </div>
-    </div>
+    <AppHero v-if="!isConnected" @connect="showConnectModal = true" />
 
     <!-- Connected: Pocket Dashboard -->
     <main v-else class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
@@ -406,10 +183,7 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
       </div>
 
       <!-- Loading -->
-      <div
-        v-if="loadingPockets"
-        class="flex items-center justify-center py-20"
-      >
+      <div v-if="loadingPockets" class="flex items-center justify-center py-20">
         <Icon name="lucide:loader-2" class="w-6 h-6 animate-spin text-muted-foreground" />
       </div>
 
@@ -454,7 +228,7 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
           @click="navigateTo(`/pocket/${pocket.id}`)"
           @deposit="openDepositDialog(pocket, 'deposit')"
           @withdraw="openDepositDialog(pocket, 'withdraw')"
-          @delete="requestDeletePocket(pocket)"
+          @delete="deleteDialogRef?.requestDelete(pocket)"
         />
       </div>
 
@@ -467,7 +241,7 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
           </span>
           <span class="flex items-center gap-1.5">
             <Icon name="lucide:link" class="w-3.5 h-3.5" />
-            Powered by Yo Protocol vaults
+            Powered by YO Protocol vaults
           </span>
           <span class="flex items-center gap-1.5">
             <Icon name="lucide:activity" class="w-3.5 h-3.5" />
@@ -514,34 +288,11 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
       @change-mode="handleChangeMode"
     />
 
-    <!-- Delete Confirmation -->
-    <AlertDialog v-model:open="showDeleteConfirm">
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{{ pocketHasFunds ? 'Can\'t delete pocket' : 'Delete pocket?' }}</AlertDialogTitle>
-          <AlertDialogDescription>
-            <template v-if="pocketHasFunds">
-              <span class="font-medium text-foreground">{{ pocketToDelete?.name }}</span> still has funds. Use the Cash Out button to withdraw first, then delete the pocket. You can also withdraw directly via
-              <a href="https://app.yo.xyz" target="_blank" rel="noopener" class="text-primary underline underline-offset-2 hover:text-primary/80">app.yo.xyz</a>.
-            </template>
-            <template v-else>
-              Are you sure you want to delete <span class="font-medium text-foreground">{{ pocketToDelete?.name }}</span>? This action cannot be undone.
-            </template>
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel :disabled="deletingPocket">{{ pocketHasFunds ? 'OK' : 'Cancel' }}</AlertDialogCancel>
-          <AlertDialogAction
-            v-if="!pocketHasFunds"
-            class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            :disabled="deletingPocket"
-            @click.prevent="confirmDeletePocket"
-          >
-            <Icon v-if="deletingPocket" name="lucide:loader-2" class="w-4 h-4 mr-1.5 animate-spin" />
-            Delete
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <AppDeletePocketDialog
+      ref="deleteDialogRef"
+      v-model:open="showDeleteConfirm"
+      :pocket-positions="pocketPositions"
+      @confirmed="handlePocketDeleted"
+    />
   </div>
 </template>

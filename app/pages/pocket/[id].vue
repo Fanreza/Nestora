@@ -581,11 +581,11 @@ watch([isConnected, accountStatus], ([connected, status]) => {
       </div>
 
       <!-- Two-column layout on desktop -->
-      <div class="lg:grid lg:grid-cols-5 lg:gap-6">
+      <div class="flex flex-col lg:grid lg:grid-cols-5 lg:gap-6">
         <!-- Left column: Analytics -->
-        <div class="lg:col-span-3">
+        <div class="contents lg:flex lg:flex-col lg:col-span-3">
           <!-- Confidence Indicators -->
-          <Card class="mb-6">
+          <Card class="mb-6 order-4 lg:order-1">
             <CardContent class="p-5">
               <h3 class="text-sm font-semibold mb-3">Vault Confidence</h3>
               <div class="grid grid-cols-2 gap-3">
@@ -669,7 +669,7 @@ watch([isConnected, accountStatus], ([connected, status]) => {
                 </div>
                 <div class="flex items-center justify-between">
                   <span class="text-xs text-muted-foreground">Protocol</span>
-                  <span class="text-xs font-medium">Yo Protocol</span>
+                  <span class="text-xs font-medium">YO Protocol</span>
                 </div>
                 <a
                   :href="`https://basescan.org/address/${strategy.vaultAddress}`"
@@ -685,7 +685,7 @@ watch([isConnected, accountStatus], ([connected, status]) => {
           </Card>
 
           <!-- Smart Insight Engine -->
-          <Card v-if="!loadingPositions && insights.length > 0" class="mb-6">
+          <Card v-if="!loadingPositions && insights.length > 0" class="mb-6 order-8 lg:order-5">
             <CardContent class="p-5">
               <div class="flex items-center gap-2 mb-3">
                 <Icon name="lucide:lightbulb" class="w-4 h-4 text-amber-500" />
@@ -705,7 +705,7 @@ watch([isConnected, accountStatus], ([connected, status]) => {
           </Card>
 
           <!-- Earnings Breakdown -->
-          <Card v-if="!loadingPositions && !loadingHistory && assetValue > 0" class="mb-6">
+          <Card v-if="!loadingPositions && !loadingHistory && assetValue > 0" class="mb-6 order-2 lg:order-2">
             <CardContent class="p-5">
               <h3 class="text-sm font-semibold mb-3">Earnings Breakdown</h3>
               <div class="space-y-3">
@@ -746,7 +746,7 @@ watch([isConnected, accountStatus], ([connected, status]) => {
           </Card>
 
           <!-- Why This Strategy? -->
-          <Card v-if="strategy" class="mb-6">
+          <Card v-if="strategy" class="mb-6 order-6 lg:order-6">
             <CardContent class="p-5">
               <h3 class="text-sm font-semibold mb-3">Why {{ strategy.label }}?</h3>
               <p class="text-xs text-muted-foreground leading-relaxed mb-3">{{ strategy.historicalContext }}</p>
@@ -770,7 +770,7 @@ watch([isConnected, accountStatus], ([connected, status]) => {
           </Card>
 
           <!-- Strategy Switch Simulation -->
-          <Card v-if="!loadingPositions && usdValue > 0 && strategySimulations.length > 0" class="mb-6">
+          <Card v-if="!loadingPositions && usdValue > 0 && strategySimulations.length > 0" class="mb-6 order-7 lg:order-4">
             <CardContent class="p-5">
               <h3 class="text-sm font-semibold mb-1">What if I switched?</h3>
               <p class="text-xs text-muted-foreground mb-3">Projected value after 1 year with {{ displayUsd(usdValue) }} invested</p>
@@ -817,7 +817,7 @@ watch([isConnected, accountStatus], ([connected, status]) => {
             </CardContent>
           </Card>
           <!-- Risk Simulation Mode -->
-          <Card v-if="!loadingPositions && usdValue > 0" class="mb-6">
+          <Card v-if="!loadingPositions && usdValue > 0" class="mb-6 order-5 lg:order-3">
             <CardContent class="p-5">
               <div class="flex items-center justify-between mb-3">
                 <h3 class="text-sm font-semibold">Stress Test</h3>
@@ -875,9 +875,9 @@ watch([isConnected, accountStatus], ([connected, status]) => {
         </div>
 
         <!-- Right column: Goal + History -->
-        <div class="lg:col-span-2">
+        <div class="contents lg:block lg:col-span-2">
           <!-- Goal: Circular Progress Ring -->
-          <Card v-if="pocket.target_amount || pocket.timeline" class="mb-6">
+          <Card v-if="pocket.target_amount || pocket.timeline" class="mb-6 order-1 lg:order-none">
             <CardContent class="p-5">
               <div class="flex items-center justify-between mb-3">
                 <div>
@@ -963,7 +963,7 @@ watch([isConnected, accountStatus], ([connected, status]) => {
           </Card>
 
           <!-- Future Projection Timeline -->
-          <Card v-if="!loadingPositions && projections.length > 0 && usdValue > 0" class="mb-6">
+          <Card v-if="!loadingPositions && projections.length > 0 && usdValue > 0" class="mb-6 order-3 lg:order-none">
             <CardContent class="p-5">
               <h3 class="text-sm font-semibold mb-3">Projection</h3>
               <div class="relative pl-4">
@@ -971,7 +971,7 @@ watch([isConnected, accountStatus], ([connected, status]) => {
                 <div
                   v-for="(p, i) in projections"
                   :key="p.year"
-                  class="relative pb-4 last:pb-0"
+                  class="relative pb-2 last:pb-0"
                 >
                   <div
                     class="absolute -left-3.25 top-1 w-3 h-3 rounded-full border-2"
@@ -1002,7 +1002,7 @@ watch([isConnected, accountStatus], ([connected, status]) => {
           </Card>
 
           <!-- Transaction history -->
-          <div class="mb-6">
+          <div class="mb-6 order-9 lg:order-none">
             <div class="flex items-center justify-between mb-3">
               <h3 class="text-sm font-semibold">Transaction History</h3>
               <div v-if="history.length > 0" class="flex items-center gap-1">
@@ -1077,7 +1077,7 @@ watch([isConnected, accountStatus], ([connected, status]) => {
           </div>
 
           <!-- Psychological Layer -->
-          <div v-if="!loadingPositions && assetValue > 0" class="flex items-start gap-2 px-1 mb-6">
+          <div v-if="!loadingPositions && assetValue > 0" class="flex items-start gap-2 px-1 mb-6 order-10 lg:order-none">
             <Icon name="lucide:sparkles" class="w-3.5 h-3.5 text-muted-foreground/60 shrink-0 mt-0.5" />
             <p class="text-xs text-muted-foreground/80 italic leading-relaxed">{{ motivation }}</p>
           </div>
@@ -1093,7 +1093,7 @@ watch([isConnected, accountStatus], ([connected, status]) => {
           </span>
           <span class="flex items-center gap-1.5">
             <Icon name="lucide:link" class="w-3.5 h-3.5" />
-            Powered by Yo Protocol vaults
+            Powered by YO Protocol vaults
           </span>
           <span class="flex items-center gap-1.5">
             <Icon name="lucide:activity" class="w-3.5 h-3.5" />

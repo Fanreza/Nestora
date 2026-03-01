@@ -3,7 +3,8 @@ import { parseUnits, formatUnits } from 'viem'
 import { STRATEGIES, type StrategyKey } from '~/config/strategies'
 import type { DbPocket } from '~/types/database'
 import type { TxState } from '~/composables/useVault'
-import type { ZapQuote, TokenBalance } from '~/composables/useEnso'
+import type { ZapQuote } from '~/composables/useEnso'
+import type { WalletToken } from '~/composables/useWalletTokens'
 
 // ---- Props ----
 const props = defineProps<{
@@ -33,9 +34,6 @@ const emit = defineEmits<{
   updateAmount: [amount: string]
   changeMode: [mode: 'deposit' | 'withdraw']
 }>()
-
-// ---- Types ----
-export type WalletToken = TokenBalance & { usdPrice: number; usdValue: number; formattedBal: number }
 
 // ---- Local state ----
 const mode = ref<'deposit' | 'withdraw'>('deposit')
@@ -676,7 +674,7 @@ defineExpose({ openFor })
         <!-- Trust micro-copy -->
         <div class="flex items-center justify-center gap-1.5 pt-3 text-[11px] text-muted-foreground/50">
           <Icon name="lucide:shield-check" class="w-3 h-3" />
-          Non-custodial · Verifiable on BaseScan
+          Self custody · Smart routed by Enso · Yield by YO
         </div>
       </div>
     </DialogContent>
