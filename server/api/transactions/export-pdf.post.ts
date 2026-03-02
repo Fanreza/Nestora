@@ -1,15 +1,10 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-
-// Read logo once at startup
-let logoBase64: string | null = null
-try {
-  const logoPath = resolve(process.cwd(), 'public/logo.png')
-  const logoBuffer = readFileSync(logoPath)
-  logoBase64 = logoBuffer.toString('base64')
-} catch { /* logo not found, skip */ }
-
 export default defineEventHandler(async (event) => {
+  // Read logo from Nitro server assets (works on Vercel + local)
+  let logoBase64: string | null = null
+  try {
+    const logoRaw = await useStorage('assets:server').getItemRaw<Buffer>('logo.png')
+    if (logoRaw) logoBase64 = Buffer.from(logoRaw).toString('base64')
+  } catch { /* logo not found, skip */ }
   const body = await readBody(event)
   const { pocket_id, pocket_name, strategy_label, asset_symbol, apy, current_value, profit } = body
 
