@@ -1,10 +1,16 @@
 export default defineEventHandler(async (event) => {
-  // Read logo from Nitro server assets (works on Vercel + local)
+  // Fetch logo from our own public URL (works on Vercel + local)
   let logoBase64: string | null = null
   try {
-    const logoRaw = await useStorage('assets:server').getItemRaw<Buffer>('logo.png')
-    if (logoRaw) logoBase64 = Buffer.from(logoRaw).toString('base64')
-  } catch { /* logo not found, skip */ }
+    const reqUrl = getRequestURL(event)
+    const origin = `${reqUrl.protocol}//${reqUrl.host}`
+    const res = await fetch(`${origin}/logo.png`)
+    if (res.ok) {
+      const buf = Buffer.from(await res.arrayBuffer())
+      logoBase64 = buf.toString('base64')
+    }
+  } catch { /* logo fetch failed, skip */ }
+
   const body = await readBody(event)
   const { pocket_id, pocket_name, strategy_label, asset_symbol, apy, current_value, profit } = body
 
