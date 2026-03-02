@@ -10,6 +10,7 @@ import {
   custom,
   http,
   getAddress,
+  numberToHex,
   type WalletClient,
   type PublicClient,
 } from 'viem'
@@ -58,6 +59,79 @@ export function usePrivyAuth() {
     return _publicClient
   }
 
+  // Wrap Privy's embedded wallet provider to fix a gas bug:
+  // Privy's handleSendTransaction → handlePopulateTransaction uses Viem's prepareTransactionRequest
+  // which returns 'gas', but Privy's toWalletApiUnsignedEthTransaction reads 'gasLimit' → gas=0.
+  // Fix: intercept send calls, sign via eth_signTransaction (which skips handlePopulateTransaction),
+  // and broadcast via public RPC.
+  function wrapProvider(provider: EIP1193Provider): EIP1193Provider {
+    return {
+      ...provider,
+      request: async (args: any) => {
+        if (args.method === 'wallet_sendTransaction' || args.method === 'eth_sendTransaction') {
+          const params = args.params?.[0]
+          const pc = getPublicClient()
+          const from = params.from || address.value
+
+          // Get nonce
+          const nonce = params.nonce
+            ? Number(typeof params.nonce === 'string' ? parseInt(params.nonce, 16) : params.nonce)
+            : await pc.getTransactionCount({ address: from, blockTag: 'pending' })
+
+          // Parse or estimate gas
+          let gasLimit: bigint
+          const rawGas = params.gas || params.gasLimit
+          if (rawGas) {
+            gasLimit = BigInt(rawGas)
+          } else {
+            const estimated = await pc.estimateGas({
+              account: from,
+              to: params.to,
+              data: params.data,
+              value: params.value ? BigInt(params.value) : 0n,
+            })
+            gasLimit = estimated + (estimated / 5n) // 20% buffer
+          }
+
+          // Parse or calculate fee params
+          let maxFeePerGas: bigint
+          let maxPriorityFeePerGas: bigint
+          if (params.maxFeePerGas) {
+            maxFeePerGas = BigInt(params.maxFeePerGas)
+            maxPriorityFeePerGas = params.maxPriorityFeePerGas ? BigInt(params.maxPriorityFeePerGas) : 1n
+          } else {
+            const block = await pc.getBlock({ blockTag: 'latest' })
+            const baseFee = block.baseFeePerGas ?? 0n
+            maxFeePerGas = baseFee * 2n + 1n
+            maxPriorityFeePerGas = 1000000n // 0.001 gwei
+          }
+
+          // Sign via eth_signTransaction — bypasses handlePopulateTransaction (gas bug)
+          // Uses 'gasLimit' field which Privy's toWalletApiUnsignedEthTransaction reads correctly
+          const signedTx = await provider.request({
+            method: 'eth_signTransaction',
+            params: [{
+              from,
+              to: params.to,
+              data: params.data,
+              value: params.value || '0x0',
+              nonce: numberToHex(nonce),
+              chainId: numberToHex(8453),
+              type: 2,
+              gasLimit: numberToHex(gasLimit),
+              maxFeePerGas: numberToHex(maxFeePerGas),
+              maxPriorityFeePerGas: numberToHex(maxPriorityFeePerGas),
+            }],
+          })
+
+          // Broadcast via public RPC (not Privy's RPC)
+          return await pc.sendRawTransaction({ serializedTransaction: signedTx as `0x${string}` })
+        }
+        return provider.request(args)
+      },
+    } as EIP1193Provider
+  }
+
   // ---- Wallet client (write operations) ----
   async function getWalletClient(): Promise<WalletClient> {
     if (_walletClient) return _walletClient
@@ -79,7 +153,7 @@ export function usePrivyAuth() {
       _walletClient = createWalletClient({
         account: address.value,
         chain: base,
-        transport: custom(_embeddedProvider),
+        transport: custom(wrapProvider(_embeddedProvider)),
       })
     } else if (_externalProvider) {
       // External wallet (MetaMask, Coinbase, etc.)

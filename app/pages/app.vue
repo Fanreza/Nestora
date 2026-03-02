@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { parseUnits } from 'viem'
-import type { StrategyKey } from '~/config/strategies'
+import { STRATEGIES, type StrategyKey } from '~/config/strategies'
 import { usePrivyAuth } from '~/composables/usePrivy'
 import { useBalances } from '~/composables/useBalances'
 import { useVault } from '~/composables/useVault'
@@ -14,6 +14,8 @@ import { useProfileStore } from '~/stores/useProfileStore'
 
 // ---- Wallet ----
 const { isConnected, address, isBase, isReady } = usePrivyAuth()
+
+const showFundDialog = ref(false)
 
 const showConnectModal = ref(false)
 
@@ -63,7 +65,7 @@ useTransactionRecorder({
   txState, txHash, reset,
   selectedPocket, selectedStrategy,
   lastTxType, lastTxAmount, showDepositDialog,
-  address, fetchBalances,
+  address, fetchBalances, fetchWalletTokens,
   fetchAllPositions: (addr) => profileStore.fetchAllPositions(addr),
   refreshPockets: () => profileStore.refreshPockets(),
 })
@@ -107,6 +109,24 @@ async function handlePocketDeleted(id: string) {
   }
 }
 
+// ---- Wallet available balance ----
+const vaultAddresses = new Set(
+  Object.values(STRATEGIES).map(s => s.vaultAddress.toLowerCase()),
+)
+const totalWalletUsd = computed(() =>
+  walletTokens.value
+    .filter(t => !vaultAddresses.has(t.token.toLowerCase()))
+    .reduce((sum, t) => sum + t.usdValue, 0),
+)
+const totalWalletFormatted = computed(() =>
+  totalWalletUsd.value.toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
+)
+
+// Fetch wallet tokens on connect
+watch(isConnected, (connected) => {
+  if (connected) fetchWalletTokens()
+}, { immediate: true })
+
 // ---- Helpers ----
 const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parseUnits('0.0005', 18))
 </script>
@@ -142,14 +162,33 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
         </AlertDescription>
       </Alert>
 
+      <Alert v-if="!loadingTokens && totalWalletUsd > 0" class="mb-4 border-primary/30 bg-primary/5 [&>svg]:text-primary">
+        <Icon name="lucide:wallet" class="w-4 h-4" />
+        <AlertTitle class="text-primary">{{ totalWalletFormatted }} available in your wallet</AlertTitle>
+        <AlertDescription>
+          You have funds ready to deposit into your pockets.
+        </AlertDescription>
+      </Alert>
+
       <!-- Portfolio summary -->
       <div class="mb-8">
         <p class="text-sm text-muted-foreground mb-1">Total balance</p>
         <Skeleton v-if="loadingPositions" class="h-10 w-40 mb-1" />
         <h1 v-else class="text-4xl font-bold tracking-tight">{{ totalPortfolioFormatted }}</h1>
-        <p class="text-sm text-muted-foreground mt-1">
-          {{ pocketCount }} pocket{{ pocketCount !== 1 ? 's' : '' }}
-        </p>
+        <div class="flex items-center gap-3 mt-1">
+          <p class="text-sm text-muted-foreground">
+            {{ pocketCount }} pocket{{ pocketCount !== 1 ? 's' : '' }}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            class="h-7 text-xs"
+            @click="showFundDialog = true"
+          >
+            <Icon name="lucide:download" class="w-3.5 h-3.5 mr-1" />
+            Fund Wallet
+          </Button>
+        </div>
       </div>
 
       <div class="flex items-center justify-between mb-5">
@@ -270,6 +309,12 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
       v-model:open="showDeleteConfirm"
       :pocket-positions="pocketPositions"
       @confirmed="handlePocketDeleted"
+    />
+
+    <AppFundWalletDialog
+      v-if="address"
+      v-model:open="showFundDialog"
+      :address="address"
     />
   </div>
 </template>

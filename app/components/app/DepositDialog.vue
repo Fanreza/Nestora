@@ -191,6 +191,24 @@ function selectToken(token: WalletToken) {
   emit('selectToken', token.token as `0x${string}`)
 }
 
+// Auto-select first available token (prefer direct deposit tokens)
+function autoSelectToken() {
+  if (mode.value !== 'deposit') return
+  if (props.walletTokens.length === 0) return
+  const direct = directDepositTokens.value
+  const pick = direct.length > 0 ? direct[0] : availableTokens.value[0]
+  if (!pick) return
+  selectedTokenAddr.value = pick.token as `0x${string}`
+  emit('selectToken', pick.token as `0x${string}`)
+}
+
+// When tokens load and we're in deposit mode without a selection, auto-pick
+watch(() => props.walletTokens, () => {
+  if (open.value && mode.value === 'deposit' && !selectedTokenAddr.value) {
+    autoSelectToken()
+  }
+})
+
 function setMaxAmount() {
   if (!selectedTokenBalance.value) return
   amount.value = selectedTokenBalance.value.formattedBal.toString()
@@ -232,9 +250,10 @@ function switchMode(newMode: 'deposit' | 'withdraw') {
   mode.value = newMode
   amount.value = ''
   selectedTokenAddr.value = null
-  view.value = newMode === 'deposit' ? 'select-token' : 'amount'
+  view.value = 'amount'
   emit('changeMode', newMode)
   emit('reset')
+  if (newMode === 'deposit') autoSelectToken()
 }
 
 function handleAction() {
@@ -259,11 +278,12 @@ watch(amount, (v) => emit('updateAmount', v))
 // ---- Expose open method for parent ----
 function openFor(pocket: DbPocket, openMode: 'deposit' | 'withdraw' = 'deposit') {
   mode.value = openMode
-  view.value = openMode === 'deposit' ? 'select-token' : 'amount'
+  view.value = 'amount'
   amount.value = ''
   selectedTokenAddr.value = null
   tokenSearch.value = ''
   open.value = true
+  if (openMode === 'deposit') autoSelectToken()
 }
 
 defineExpose({ openFor })
@@ -420,6 +440,25 @@ defineExpose({ openFor })
 
       <!-- ===== VIEW: AMOUNT INPUT ===== -->
       <div v-else class="px-6 pb-6 space-y-4">
+        <!-- Deposit: loading tokens placeholder -->
+        <div v-if="mode === 'deposit' && !selectedTokenBalance && (loadingTokens || walletTokens.length === 0)" class="space-y-3">
+          <p class="text-xs font-medium text-muted-foreground text-center">Select the asset you want to deposit</p>
+          <div class="flex items-center gap-3 p-3 rounded-xl border">
+            <Skeleton class="w-9 h-9 rounded-full shrink-0" />
+            <div>
+              <Skeleton class="h-4 w-20 mb-1" />
+              <Skeleton class="h-3 w-14" />
+            </div>
+            <div class="flex-1 text-right">
+              <Skeleton class="h-7 w-16 ml-auto mb-1" />
+              <Skeleton class="h-3 w-24 ml-auto" />
+            </div>
+          </div>
+          <div class="grid grid-cols-5 gap-2">
+            <Skeleton v-for="i in 5" :key="i" class="h-10 rounded-lg" />
+          </div>
+        </div>
+
         <!-- Selected token display + amount (deposit mode) -->
         <div v-if="mode === 'deposit' && selectedTokenBalance" class="space-y-3">
           <p class="text-xs font-medium text-muted-foreground text-center">Select the asset you want to deposit</p>

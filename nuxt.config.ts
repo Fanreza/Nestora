@@ -15,6 +15,7 @@ export default defineNuxtConfig({
       privyAppId: '',
       privyClientId: '',
       walletConnectProjectId: '',
+      moonpayApiKey: '',
     },
   },
 

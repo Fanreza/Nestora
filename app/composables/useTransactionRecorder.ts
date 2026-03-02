@@ -13,6 +13,7 @@ export interface TransactionRecorderDeps {
   showDepositDialog: Ref<boolean>
   address: Ref<`0x${string}` | undefined>
   fetchBalances: () => void
+  fetchWalletTokens: () => Promise<void> | void
   fetchAllPositions: (addr: string) => Promise<void> | void
   refreshPockets: () => Promise<void> | void
 }
@@ -42,6 +43,7 @@ export function useTransactionRecorder(deps: TransactionRecorderDeps) {
       // Wait a moment for RPC to index the new state, then refresh
       await new Promise(r => setTimeout(r, 2000))
       deps.fetchBalances()
+      deps.fetchWalletTokens()
       deps.refreshPockets()
       if (deps.address.value) await deps.fetchAllPositions(deps.address.value)
     }
