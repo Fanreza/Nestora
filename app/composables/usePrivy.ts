@@ -181,6 +181,10 @@ export function usePrivyAuth() {
     // so the app shows loading spinner instead of sign-in screen
   }
 
+  function markAsReady() {
+    isReady.value = true
+  }
+
   function connectWithFarcasterProvider(provider: any, addr: string) {
     _externalProvider = provider
     address.value = getAddress(addr) as `0x${string}`
@@ -553,6 +557,7 @@ export function usePrivyAuth() {
     loginWithWalletConnect,
     loginWithCoinbaseSmartWallet,
     markAsMiniApp,
+    markAsReady,
     connectWithFarcasterProvider,
     logout,
 
