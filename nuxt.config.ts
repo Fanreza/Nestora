@@ -37,7 +37,7 @@ export default defineNuxtConfig({
   vite: {
     plugins: [tailwindcss()],
     optimizeDeps: {
-      include: ['@coinbase/wallet-sdk', '@privy-io/js-sdk-core'],
+      include: ['@coinbase/wallet-sdk', '@privy-io/js-sdk-core', '@farcaster/miniapp-sdk', 'comlink'],
     },
   },
 
@@ -64,7 +64,7 @@ export default defineNuxtConfig({
         // Base
         { name: 'base:app_id', content: '69a8116ef1a340127fafeb96' },
         // Farcaster Mini App
-        { name: 'fc:miniapp', content: JSON.stringify({ version: 'next', imageUrl: 'https://nestora.aethereal.top/logo.png', button: { title: 'Open Nestora', action: { type: 'launch_miniapp', name: 'Nestora', url: 'https://nestora.aethereal.top', splashImageUrl: 'https://nestora.aethereal.top/logo.png', splashBackgroundColor: '#09090b' } } }) },
+        { name: 'fc:miniapp', content: JSON.stringify({ version: '1', imageUrl: 'https://nestora.aethereal.top/logo.png', button: { title: 'Open Nestora', action: { type: 'launch_frame', name: 'Nestora', url: 'https://nestora.aethereal.top', splashImageUrl: 'https://nestora.aethereal.top/logo.png', splashBackgroundColor: '#09090b' } } }) },
         // Theme
         { name: 'theme-color', content: '#10B981' },
       ],
