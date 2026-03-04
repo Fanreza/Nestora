@@ -174,7 +174,12 @@ export function usePrivyAuth() {
     return _walletClient
   }
 
-  // ---- Farcaster mini app: auto-connect with SDK wallet ----
+  // ---- Farcaster mini app ----
+  function markAsMiniApp() {
+    isMiniApp.value = true
+    isReady.value = true
+  }
+
   function connectWithFarcasterProvider(provider: any, addr: string) {
     _externalProvider = provider
     address.value = getAddress(addr) as `0x${string}`
@@ -546,6 +551,7 @@ export function usePrivyAuth() {
     loginWithProvider,
     loginWithWalletConnect,
     loginWithCoinbaseSmartWallet,
+    markAsMiniApp,
     connectWithFarcasterProvider,
     logout,
 

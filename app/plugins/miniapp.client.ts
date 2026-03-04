@@ -3,27 +3,31 @@ import { connect, getAccount } from '@wagmi/core'
 import { miniAppWagmiConfig } from '~/config/wagmi-miniapp'
 import { usePrivyAuth } from '~/composables/usePrivy'
 
-export default defineNuxtPlugin(async () => {
-  // Quick check: not in an iframe → not a mini app
+export default defineNuxtPlugin(() => {
+  // Not in an iframe → not a mini app
   if (typeof window === 'undefined' || window === window.parent) return
 
-  try {
-    // Auto-connect using the farcasterMiniApp connector (first in config)
-    const connector = miniAppWagmiConfig.connectors[0]
-    await connect(miniAppWagmiConfig, { connector })
+  // Set mini app flag synchronously so privy plugin skips
+  const { markAsMiniApp, connectWithFarcasterProvider } = usePrivyAuth()
+  markAsMiniApp()
 
-    const account = getAccount(miniAppWagmiConfig)
-    if (account.address) {
-      // Get the EIP-1193 provider from the connected connector
-      const provider = await connector.getProvider()
-
-      const { connectWithFarcasterProvider } = usePrivyAuth()
-      connectWithFarcasterProvider(provider, account.address)
-    }
-  } catch (e) {
-    console.warn('[miniapp] auto-connect failed:', e)
-  }
-
-  // Signal ready to dismiss splash screen
+  // Signal ready immediately so splash screen dismisses
   sdk.actions.ready().catch(() => {})
+
+  // Auto-connect wallet in background — MUST be non-blocking
+  // otherwise the async Comlink RPC hangs and Nuxt never mounts
+  const connector = miniAppWagmiConfig.connectors[0]
+  if (!connector) return
+
+  connect(miniAppWagmiConfig, { connector })
+    .then(async () => {
+      const account = getAccount(miniAppWagmiConfig)
+      if (account.address) {
+        const provider = await connector.getProvider()
+        connectWithFarcasterProvider(provider, account.address)
+      }
+    })
+    .catch((e) => {
+      console.warn('[miniapp] auto-connect failed:', e)
+    })
 })
