@@ -1,26 +1,26 @@
 {
-  "accountAssociation": {
-    "header": "",
-    "payload": "",
-    "signature": ""
-  },
-  "miniapp": {
-    "version": "1",
-    "name": "Nestora",
-    "homeUrl": "https://nestora.aethereal.top",
-    "iconUrl": "https://nestora.aethereal.top/logo.png",
-    "splashImageUrl": "https://nestora.aethereal.top/logo.png",
-    "splashBackgroundColor": "#09090b",
-    "subtitle": "Smart savings on Base",
-    "description": "DeFi savings app on Base. Create pockets, set goals, earn yield automatically. Deposit any token into yield-bearing vaults. No DeFi knowledge needed.",
-    "screenshotUrls": [],
-    "primaryCategory": "finance",
-    "tags": ["defi", "savings", "yield", "base", "usdc"],
-    "heroImageUrl": "https://nestora.aethereal.top/logo.png",
-    "tagline": "Save smarter, earn more",
-    "ogTitle": "Nestora — Smart Savings on Base",
-    "ogDescription": "Create pockets, set goals, earn yield. Deposit any token into yield-bearing vaults. No DeFi knowledge needed.",
-    "ogImageUrl": "https://nestora.aethereal.top/logo.png",
-    "noindex": false
-  }
+	"accountAssociation": {
+		"header": "eyJmaWQiOi0xLCJ0eXBlIjoiYXV0aCIsImtleSI6IjB4M2UzRTcyQmVCODMyMDExMTM4NzVlODNjOTVBOTA4YWYxN2YxRDllZCJ9",
+		"payload": "eyJkb21haW4iOiJuZXN0b3JhLmFldGhlcmVhbC50b3AifQ",
+		"signature": "AAAAAAAAAAAAAAAAyhG94Fl3s2MRZwKIYr4qFzl2yhEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAkSCrVbLAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAC6XtDGqoxJA4-Bnlh-JjPEqfQooAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVQ_-6NvAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAjLnGyis6zdun4MmA-WgPPpL_0XKoVa7bddOM38DSiiYL6Ac-YWUpRCo8mAYCzCqhKg6K7GYSRAFU3twLZdYSsgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAXDWjr61vnTJKbrn9VU3gYeDVqHHhWwqMROytRWUz0BEOrSzgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABkxqy2YVMnpQEJpNfYgRU5DMDCehDETjtR71Im7hkj4VNM0UwaOtfIsj9FBa2OTbZo-pgkG1OEDpqOIF8HEnQ9gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAl8ZgIay2xclZzG8RWZzuWvO8j9R0fus3XxDee9lRlVy8dAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACKeyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiVXFQQWt3MzV4c1VPa0lfU04wWGhKUS1GQzFnay00T0J1dTFFNkpIaG1jZyIsIm9yaWdpbiI6Imh0dHBzOi8va2V5cy5jb2luYmFzZS5jb20iLCJjcm9zc09yaWdpbiI6ZmFsc2V9AAAAAAAAAAAAAAAAAAAAAAAAAAAAAGSSZJJkkmSSZJJkkmSSZJJkkmSSZJJkkmSSZJJkkmSS"
+	},
+	"miniapp": {
+		"version": "1",
+		"name": "Nestora",
+		"homeUrl": "https://nestora.aethereal.top",
+		"iconUrl": "https://nestora.aethereal.top/logo.png",
+		"splashImageUrl": "https://nestora.aethereal.top/logo.png",
+		"splashBackgroundColor": "#09090b",
+		"subtitle": "Smart savings on Base",
+		"description": "DeFi savings app on Base. Create pockets, set goals, earn yield automatically. Deposit any token into yield-bearing vaults. No DeFi knowledge needed.",
+		"screenshotUrls": [],
+		"primaryCategory": "finance",
+		"tags": ["defi", "savings", "yield", "base", "usdc"],
+		"heroImageUrl": "https://nestora.aethereal.top/logo.png",
+		"tagline": "Save smarter, earn more",
+		"ogTitle": "Nestora — Smart Savings on Base",
+		"ogDescription": "Create pockets, set goals, earn yield. Deposit any token into yield-bearing vaults. No DeFi knowledge needed.",
+		"ogImageUrl": "https://nestora.aethereal.top/logo.png",
+		"noindex": false
+	}
 }
