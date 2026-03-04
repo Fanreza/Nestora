@@ -7,20 +7,20 @@
 	"miniapp": {
 		"version": "1",
 		"name": "Nestora",
+		"iconUrl": "https://nestora.aethereal.top/icon.png",
 		"homeUrl": "https://nestora.aethereal.top",
-		"iconUrl": "https://nestora.aethereal.top/logo.png",
-		"splashImageUrl": "https://nestora.aethereal.top/logo.png",
-		"splashBackgroundColor": "#09090b",
+		"splashImageUrl": "https://nestora.aethereal.top/splash.png",
+		"splashBackgroundColor": "#0B0E0D",
+		"heroImageUrl": "https://nestora.aethereal.top/hero.png",
 		"subtitle": "Smart savings on Base",
 		"description": "DeFi savings app on Base. Create pockets, set goals, earn yield automatically. Deposit any token into yield-bearing vaults. No DeFi knowledge needed.",
 		"screenshotUrls": [],
 		"primaryCategory": "finance",
 		"tags": ["defi", "savings", "yield", "base", "usdc"],
-		"heroImageUrl": "https://nestora.aethereal.top/logo.png",
 		"tagline": "Save smarter, earn more",
 		"ogTitle": "Nestora — Smart Savings",
 		"ogDescription": "DeFi savings on Base. Create pockets, set goals, earn yield. No DeFi knowledge needed.",
-		"ogImageUrl": "https://nestora.aethereal.top/logo.png",
+		"ogImageUrl": "https://nestora.aethereal.top/logo.jpeg",
 		"noindex": false
 	}
 }
