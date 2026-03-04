@@ -18,8 +18,8 @@
 		"tags": ["defi", "savings", "yield", "base", "usdc"],
 		"heroImageUrl": "https://nestora.aethereal.top/logo.png",
 		"tagline": "Save smarter, earn more",
-		"ogTitle": "Nestora — Smart Savings on Base",
-		"ogDescription": "Create pockets, set goals, earn yield. Deposit any token into yield-bearing vaults. No DeFi knowledge needed.",
+		"ogTitle": "Nestora — Smart Savings",
+		"ogDescription": "DeFi savings on Base. Create pockets, set goals, earn yield. No DeFi knowledge needed.",
 		"ogImageUrl": "https://nestora.aethereal.top/logo.png",
 		"noindex": false
 	}
