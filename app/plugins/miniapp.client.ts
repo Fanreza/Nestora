@@ -1,4 +1,6 @@
 import { sdk } from '@farcaster/miniapp-sdk'
+import { connect, getAccount } from '@wagmi/core'
+import { miniAppWagmiConfig } from '~/config/wagmi-miniapp'
 import { usePrivyAuth } from '~/composables/usePrivy'
 
 export default defineNuxtPlugin(async () => {
@@ -6,14 +8,17 @@ export default defineNuxtPlugin(async () => {
   if (typeof window === 'undefined' || window === window.parent) return
 
   try {
-    // Get the Farcaster wallet provider and user's address
-    const provider = await sdk.wallet.getEthereumProvider()
-    if (provider) {
-      const accounts: string[] = await provider.request({ method: 'eth_requestAccounts' })
-      if (accounts?.[0]) {
-        const { connectWithFarcasterProvider } = usePrivyAuth()
-        connectWithFarcasterProvider(provider, accounts[0])
-      }
+    // Auto-connect using the farcasterMiniApp connector (first in config)
+    const connector = miniAppWagmiConfig.connectors[0]
+    await connect(miniAppWagmiConfig, { connector })
+
+    const account = getAccount(miniAppWagmiConfig)
+    if (account.address) {
+      // Get the EIP-1193 provider from the connected connector
+      const provider = await connector.getProvider()
+
+      const { connectWithFarcasterProvider } = usePrivyAuth()
+      connectWithFarcasterProvider(provider, account.address)
     }
   } catch (e) {
     console.warn('[miniapp] auto-connect failed:', e)

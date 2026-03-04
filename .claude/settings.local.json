@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx nuxi typecheck)"
+      "Bash(npx nuxi typecheck)",
+      "WebFetch(domain:docs.base.org)"
     ]
   }
 }
