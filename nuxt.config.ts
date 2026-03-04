@@ -73,6 +73,15 @@ export default defineNuxtConfig({
         { rel: 'apple-touch-icon', href: '/logo.png' },
         { rel: 'canonical', href: 'https://nestora.aethereal.top' },
       ],
+      script: [
+        // Call sdk.actions.ready() via CDN independently of Nuxt —
+        // ensures splash screen hides even if the Vue app fails to init
+        {
+          innerHTML: "import('https://esm.sh/@farcaster/miniapp-sdk').then(function(m){return m.sdk.actions.ready()}).catch(function(){})",
+          type: 'module',
+          tagPosition: 'head',
+        },
+      ],
     },
   },
 
@@ -83,7 +92,7 @@ export default defineNuxtConfig({
     routeRules: {
       '/**': {
         headers: {
-          'Content-Security-Policy': "frame-ancestors 'self' https://auth.privy.io https://*.privy.io https://*.base.org https://base.org https://*.warpcast.com https://warpcast.com https://*.farcaster.xyz",
+          'Content-Security-Policy': "frame-ancestors *",
         },
       },
     },

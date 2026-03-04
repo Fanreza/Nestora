@@ -1,11 +1,11 @@
 import { sdk } from '@farcaster/miniapp-sdk'
 
-export default defineNuxtPlugin(async () => {
-  // Call ready immediately — the host needs this signal ASAP
-  // Don't gate on app:mounted; the SDK only needs window.parent to exist
-  try {
-    await sdk.actions.ready()
-  } catch (e) {
-    console.warn('[miniapp] sdk.actions.ready() failed:', e)
-  }
+export default defineNuxtPlugin(() => {
+  // Fire-and-forget: do NOT await — Comlink waits for host response
+  // which can block Nuxt initialization if the host isn't ready yet
+  sdk.actions.ready().then(() => {
+    console.log('[miniapp] ready signal acknowledged by host')
+  }).catch((e) => {
+    console.warn('[miniapp] sdk.actions.ready() error:', e)
+  })
 })
