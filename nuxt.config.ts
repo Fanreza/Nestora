@@ -61,6 +61,8 @@ export default defineNuxtConfig({
         { name: 'twitter:title', content: 'Nestora — Smart Savings on Base' },
         { name: 'twitter:description', content: 'Create pockets, set goals, earn yield. Deposit any token into yield-bearing vaults. No DeFi knowledge needed.' },
         { name: 'twitter:image', content: 'https://nestora.aethereal.top/logo.png' },
+        // Base
+        { name: 'base:app_id', content: '69a8116ef1a340127fafeb96' },
         // Theme
         { name: 'theme-color', content: '#10B981' },
       ],
