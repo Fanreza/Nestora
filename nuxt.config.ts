@@ -63,6 +63,8 @@ export default defineNuxtConfig({
         { name: 'twitter:image', content: 'https://nestora.aethereal.top/logo.png' },
         // Base
         { name: 'base:app_id', content: '69a8116ef1a340127fafeb96' },
+        // Farcaster Mini App
+        { name: 'fc:miniapp', content: JSON.stringify({ version: 'next', imageUrl: 'https://nestora.aethereal.top/logo.png', button: { title: 'Open Nestora', action: { type: 'launch_miniapp', name: 'Nestora', url: 'https://nestora.aethereal.top', splashImageUrl: 'https://nestora.aethereal.top/logo.png', splashBackgroundColor: '#09090b' } } }) },
         // Theme
         { name: 'theme-color', content: '#10B981' },
       ],
@@ -81,8 +83,7 @@ export default defineNuxtConfig({
     routeRules: {
       '/**': {
         headers: {
-          'X-Frame-Options': 'SAMEORIGIN',
-          'Content-Security-Policy': "frame-ancestors 'self' https://auth.privy.io https://*.privy.io",
+          'Content-Security-Policy': "frame-ancestors 'self' https://auth.privy.io https://*.privy.io https://*.base.org https://base.org https://*.warpcast.com https://warpcast.com https://*.farcaster.xyz",
         },
       },
     },

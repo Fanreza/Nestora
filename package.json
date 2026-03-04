@@ -12,6 +12,7 @@
   "dependencies": {
     "@coinbase/wallet-sdk": "^4.3.7",
     "@ensofinance/sdk": "^2.0.12",
+    "@farcaster/miniapp-sdk": "^0.2.3",
     "@pinia/nuxt": "^0.11.3",
     "@privy-io/js-sdk-core": "^0.60.3",
     "@supabase/supabase-js": "^2.98.0",
