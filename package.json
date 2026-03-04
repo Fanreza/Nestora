@@ -19,7 +19,6 @@
     "@supabase/supabase-js": "^2.98.0",
     "@tanstack/vue-query": "^5.92.9",
     "@vueuse/core": "^12.8.2",
-    "@wagmi/connectors": "^7.2.1",
     "@wagmi/core": "^2.22.1",
     "@walletconnect/ethereum-provider": "^2.23.7",
     "@yo-protocol/core": "^0.0.3",
