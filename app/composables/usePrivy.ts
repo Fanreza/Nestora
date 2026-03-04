@@ -177,7 +177,8 @@ export function usePrivyAuth() {
   // ---- Farcaster mini app ----
   function markAsMiniApp() {
     isMiniApp.value = true
-    isReady.value = true
+    // Don't set isReady yet — wait for wallet to connect
+    // so the app shows loading spinner instead of sign-in screen
   }
 
   function connectWithFarcasterProvider(provider: any, addr: string) {
