@@ -7,6 +7,13 @@ export default defineNuxtPlugin(async (nuxtApp) => {
   const queryClient = new QueryClient()
   nuxtApp.vueApp.use(VueQueryPlugin, { queryClient })
 
+  // Skip Privy entirely when running inside a Farcaster mini app —
+  // the miniapp plugin already connected via sdk.wallet
+  const { isMiniApp } = usePrivyAuth()
+  if (isMiniApp.value) {
+    return { provide: { privy: null } }
+  }
+
   // Initialize Privy singleton — wrapped in try/catch so the app still
   // renders when loaded inside an iframe that restricts third-party resources
   let privy: ReturnType<typeof getPrivy> | null = null

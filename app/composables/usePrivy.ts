@@ -24,6 +24,7 @@ const isConnecting = ref(false)
 const address = ref<`0x${string}` | undefined>()
 const privyUser = ref<User | null>(null)
 const loginMethod = ref<string | null>(null)
+const isMiniApp = ref(false)
 
 // Auto-persist loginMethod to localStorage
 watch(loginMethod, (val) => {
@@ -136,9 +137,20 @@ export function usePrivyAuth() {
   async function getWalletClient(): Promise<WalletClient> {
     if (_walletClient) return _walletClient
 
-    if (!privyUser.value || !address.value) throw new Error('Not authenticated')
+    if (!address.value) throw new Error('Not authenticated')
 
-    // Try embedded wallet first
+    // External provider first: Farcaster mini app, MetaMask, Coinbase, etc.
+    if (_externalProvider) {
+      _walletClient = createWalletClient({
+        account: address.value,
+        chain: base,
+        transport: custom(_externalProvider),
+      })
+      return _walletClient
+    }
+
+    // Privy embedded wallet
+    if (!privyUser.value) throw new Error('Not authenticated')
     const embeddedWallet = getUserEmbeddedEthereumWallet(privyUser.value)
     if (embeddedWallet) {
       const entropy = getEntropyDetailsFromUser(privyUser.value)
@@ -155,18 +167,21 @@ export function usePrivyAuth() {
         chain: base,
         transport: custom(wrapProvider(_embeddedProvider)),
       })
-    } else if (_externalProvider) {
-      // External wallet (MetaMask, Coinbase, etc.)
-      _walletClient = createWalletClient({
-        account: address.value,
-        chain: base,
-        transport: custom(_externalProvider),
-      })
     } else {
       throw new Error('No wallet provider available')
     }
 
     return _walletClient
+  }
+
+  // ---- Farcaster mini app: auto-connect with SDK wallet ----
+  function connectWithFarcasterProvider(provider: any, addr: string) {
+    _externalProvider = provider
+    address.value = getAddress(addr) as `0x${string}`
+    isAuthenticated.value = true
+    isReady.value = true
+    isMiniApp.value = true
+    loginMethod.value = 'farcaster_miniapp'
   }
 
   // ---- Session restoration ----
@@ -512,6 +527,7 @@ export function usePrivyAuth() {
     address: readonly(address),
     user: readonly(privyUser),
     loginMethod: readonly(loginMethod),
+    isMiniApp: readonly(isMiniApp),
     chainId,
     isBase,
 
@@ -530,6 +546,7 @@ export function usePrivyAuth() {
     loginWithProvider,
     loginWithWalletConnect,
     loginWithCoinbaseSmartWallet,
+    connectWithFarcasterProvider,
     logout,
 
     // Session
