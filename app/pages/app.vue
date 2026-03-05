@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { parseUnits } from 'viem'
 import { STRATEGIES, type StrategyKey } from '~/config/strategies'
+import type { DbPocket } from '~/types/database'
 import { usePrivyAuth } from '~/composables/usePrivy'
 import { useBalances } from '~/composables/useBalances'
 import { useVault } from '~/composables/useVault'
@@ -11,6 +12,7 @@ import { useDepositFlow } from '~/composables/useDepositFlow'
 import { useTransactionRecorder } from '~/composables/useTransactionRecorder'
 import { storeToRefs } from 'pinia'
 import { useProfileStore } from '~/stores/useProfileStore'
+import { toast } from 'vue-sonner'
 
 // ---- Wallet ----
 const { isConnected, address, isBase, isReady } = usePrivyAuth()
@@ -34,7 +36,7 @@ const pocketCount = computed(() => pockets.value.length)
 
 // ---- Balances & Vault ----
 const { ethBalance, fetchBalances, loading: loadingBalances } = useBalances()
-const { txState, txHash, txError, deposit, redeem, zapDeposit, reset } = useVault()
+const { txState, txHash, txError, deposit, redeem, zapDeposit, switchVault, reset } = useVault()
 const { getZapQuote, getWalletBalances, NATIVE_TOKEN } = useEnso()
 const { getTokenPrices } = useCoinGecko()
 
@@ -94,6 +96,62 @@ async function handleCreatePocket(payload: {
     }
   } finally {
     creatingPocket.value = false
+  }
+}
+
+// ---- Switch vault ----
+const showSwitchDialog = ref(false)
+const switchPocket = ref<DbPocket | null>(null)
+const switchLoading = ref(false)
+
+function openSwitchDialog(pocket: DbPocket) {
+  switchPocket.value = pocket
+  showSwitchDialog.value = true
+}
+
+async function handleSwitchVault(toStrategyKey: StrategyKey) {
+  if (!switchPocket.value || switchLoading.value) return
+  const fromStrategy = STRATEGIES[switchPocket.value.strategy_key as StrategyKey]
+  const toStrategy = STRATEGIES[toStrategyKey]
+  if (!fromStrategy || !toStrategy) return
+
+  switchLoading.value = true
+  try {
+    const { recordTransaction } = useUserData()
+    const pos = pocketPositions.value[switchPocket.value.id]
+    const hasBalance = pos && pos.shares > 0n
+
+    if (hasBalance) {
+      await switchVault(fromStrategy, toStrategy, pos.shares)
+      if (txState.value !== 'confirmed') return
+
+      if (txHash.value) {
+        await recordTransaction({
+          pocket_id: switchPocket.value.id,
+          type: 'switch',
+          amount: `${fromStrategy.vaultSymbol} → ${toStrategy.vaultSymbol}`,
+          asset_symbol: toStrategy.assetSymbol,
+          tx_hash: txHash.value,
+          timestamp: Math.floor(Date.now() / 1000),
+        })
+      }
+    }
+
+    await $fetch(`/api/pockets/${switchPocket.value.id}`, {
+      method: 'PATCH',
+      body: { strategy_key: toStrategyKey },
+    })
+    await profileStore.refreshPockets()
+    if (address.value) await profileStore.fetchAllPositions(address.value)
+
+    showSwitchDialog.value = false
+    switchPocket.value = null
+    reset()
+    toast.success('Vault switched!', {
+      description: `${fromStrategy.label} → ${toStrategy.label}`,
+    })
+  } finally {
+    switchLoading.value = false
   }
 }
 
@@ -248,6 +306,7 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
           @click="navigateTo(`/pocket/${pocket.id}`)"
           @deposit="openDepositDialog(pocket, 'deposit')"
           @withdraw="openDepositDialog(pocket, 'withdraw')"
+          @switch="openSwitchDialog(pocket)"
           @delete="deleteDialogRef?.requestDelete(pocket)"
         />
       </div>
@@ -302,6 +361,19 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
       @select-token="handleSelectToken"
       @update-amount="handleUpdateAmount"
       @change-mode="handleChangeMode"
+    />
+
+    <AppSwitchVaultDialog
+      v-model:open="showSwitchDialog"
+      :pocket="switchPocket"
+      :position="switchPocket ? (pocketPositions[switchPocket.id] || { shares: 0n, value: 0n }) : { shares: 0n, value: 0n }"
+      :asset-price="switchPocket ? profileStore.getAssetPrice(switchPocket.strategy_key) : 0"
+      :tx-state="txState"
+      :tx-hash="txHash"
+      :tx-error="txError"
+      :loading="switchLoading"
+      @confirm="handleSwitchVault"
+      @reset="reset"
     />
 
     <AppDeletePocketDialog

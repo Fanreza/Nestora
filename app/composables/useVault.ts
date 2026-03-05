@@ -405,6 +405,77 @@ export function useVault() {
     }
   }
 
+  // ---- Switch Vault: swap old vault shares → new vault shares via Enso ----
+  async function switchVault(
+    fromStrategy: Strategy,
+    toStrategy: Strategy,
+    shares: bigint,
+  ) {
+    if (!address.value || shares === 0n) return
+    try {
+      txState.value = 'preparing'
+      txError.value = ''
+      txHash.value = null
+
+      const { getApprovalTx } = useEnso()
+
+      // Get Enso route: old vault token → new vault token (single tx)
+      const quote = await $fetch<any>('/api/enso/route', {
+        method: 'POST',
+        body: {
+          fromAddress: address.value,
+          amountIn: shares.toString(),
+          tokenIn: fromStrategy.vaultAddress,
+          tokenOut: toStrategy.vaultAddress,
+          slippage: '300',
+        },
+      })
+
+      if (!quote?.tx) {
+        txError.value = 'Could not find a route for this switch'
+        txState.value = 'failed'
+        return
+      }
+
+      // Approve old vault shares to Enso router
+      txState.value = 'approving'
+      const approval = await getApprovalTx(
+        fromStrategy.vaultAddress as `0x${string}`,
+        shares.toString(),
+        address.value,
+      )
+      if (approval?.tx) {
+        const approveHash = await sendTx({
+          to: approval.tx.to as `0x${string}`,
+          data: approval.tx.data as `0x${string}`,
+          value: BigInt(approval.tx.value || '0'),
+        })
+        const publicClient = getPublicClient()
+        await publicClient.waitForTransactionReceipt({ hash: approveHash })
+      }
+
+      // Execute the swap
+      txState.value = 'awaiting_signature'
+      const hash = await sendTx({
+        to: quote.tx.to as `0x${string}`,
+        data: quote.tx.data as `0x${string}`,
+        value: BigInt(quote.tx.value || '0'),
+      })
+
+      txHash.value = hash
+      txState.value = 'pending'
+
+      const publicClient = getPublicClient()
+      const receipt = await publicClient.waitForTransactionReceipt({ hash })
+      txState.value = receipt.status === 'success' ? 'confirmed' : 'failed'
+      if (receipt.status !== 'success') txError.value = 'Transaction reverted'
+    } catch (e: any) {
+      console.error('[useVault] switchVault error:', e)
+      txState.value = 'failed'
+      txError.value = e.shortMessage || e.message || 'Switch vault failed'
+    }
+  }
+
   function reset() {
     txState.value = 'idle'
     txHash.value = null
@@ -420,6 +491,7 @@ export function useVault() {
     deposit,
     redeem,
     zapDeposit,
+    switchVault,
     estimateDepositGas,
     getShareBalance,
     getShareValue,

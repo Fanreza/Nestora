@@ -45,9 +45,10 @@ const assetPrice = computed(() =>
 
 // ---- Transaction history (on-chain via Yo API) ----
 interface HistoryEntry {
-  type: 'deposit' | 'withdraw' | 'redeem'
+  type: 'deposit' | 'withdraw' | 'redeem' | 'switch'
   timestamp: number
   amount: string
+  assetSymbol: string
   txHash: string
 }
 const history = ref<HistoryEntry[]>([])
@@ -63,6 +64,7 @@ async function fetchHistory() {
       type: tx.type,
       timestamp: tx.timestamp,
       amount: tx.amount,
+      assetSymbol: tx.asset_symbol,
       txHash: tx.tx_hash,
     }))
   } catch (e) {
@@ -263,6 +265,7 @@ const TX_TYPE_CONFIG: Record<string, { label: string; icon: string; color: strin
   deposit: { label: 'Deposit', icon: 'lucide:arrow-down-to-line', color: 'text-primary' },
   withdraw: { label: 'Withdraw', icon: 'lucide:arrow-up-from-line', color: 'text-orange-500' },
   redeem: { label: 'Redeem', icon: 'lucide:arrow-up-from-line', color: 'text-orange-500' },
+  switch: { label: 'Switch Vault', icon: 'lucide:repeat-2', color: 'text-blue-400' },
 }
 
 // ---- Export functions ----
@@ -274,7 +277,7 @@ function exportCSV() {
     formatTxDate(tx.timestamp),
     TX_TYPE_CONFIG[tx.type]?.label ?? tx.type,
     tx.amount,
-    strategy.value?.assetSymbol ?? '',
+    tx.assetSymbol || strategy.value?.assetSymbol || '',
     tx.txHash,
   ])
 
@@ -326,16 +329,20 @@ function exportTaxCSV() {
 
   const asset = strategy.value?.assetSymbol ?? ''
   const deposits = history.value.filter(tx => tx.type === 'deposit')
-  const withdrawals = history.value.filter(tx => tx.type !== 'deposit')
+  const withdrawals = history.value.filter(tx => tx.type === 'withdraw' || tx.type === 'redeem')
+  const switches = history.value.filter(tx => tx.type === 'switch')
 
   const headers = ['Deposit Date', 'Withdraw Date', 'Amount', 'Yield Earned', 'Asset', 'TX Hash']
   const rows: string[][] = []
 
   for (const tx of deposits) {
-    rows.push([formatTxDate(tx.timestamp), '', tx.amount, '', asset, tx.txHash])
+    rows.push([formatTxDate(tx.timestamp), '', tx.amount, '', tx.assetSymbol || asset, tx.txHash])
   }
   for (const tx of withdrawals) {
-    rows.push(['', formatTxDate(tx.timestamp), tx.amount, '', asset, tx.txHash])
+    rows.push(['', formatTxDate(tx.timestamp), tx.amount, '', tx.assetSymbol || asset, tx.txHash])
+  }
+  for (const tx of switches) {
+    rows.push([formatTxDate(tx.timestamp), '', tx.amount, '', 'Switch', tx.txHash])
   }
 
   // Summary row
@@ -1043,7 +1050,11 @@ watch([isConnected, isReady], ([connected, ready]) => {
                 <CardContent class="p-4 flex items-center gap-3">
                   <div
                     class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-                    :class="tx.type === 'deposit' ? 'bg-primary/10' : 'bg-orange-500/10'"
+                    :class="{
+                      'bg-primary/10': tx.type === 'deposit',
+                      'bg-blue-500/10': tx.type === 'switch',
+                      'bg-orange-500/10': tx.type !== 'deposit' && tx.type !== 'switch',
+                    }"
                   >
                     <Icon
                       :name="TX_TYPE_CONFIG[tx.type]?.icon || 'lucide:circle'"
@@ -1057,7 +1068,8 @@ watch([isConnected, isReady], ([connected, ready]) => {
                   </div>
                   <div class="text-right shrink-0">
                     <p class="text-sm font-medium font-mono">
-                      {{ tx.type === 'deposit' ? '+' : '-' }}{{ tx.amount }} {{ strategy?.assetSymbol }}
+                      <template v-if="tx.type === 'switch'">{{ tx.amount }}</template>
+                      <template v-else>{{ tx.type === 'deposit' ? '+' : '-' }}{{ tx.amount }} {{ tx.assetSymbol || strategy?.assetSymbol }}</template>
                     </p>
                     <a
                       :href="`https://basescan.org/tx/${tx.txHash}`"

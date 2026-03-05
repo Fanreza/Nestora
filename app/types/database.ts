@@ -38,7 +38,7 @@ export interface UpdatePocketInput {
 export interface DbTransaction {
   id: string
   pocket_id: string
-  type: 'deposit' | 'withdraw' | 'redeem'
+  type: 'deposit' | 'withdraw' | 'redeem' | 'switch'
   amount: string
   asset_symbol: string
   tx_hash: string
@@ -48,7 +48,7 @@ export interface DbTransaction {
 
 export interface CreateTransactionInput {
   pocket_id: string
-  type: 'deposit' | 'withdraw' | 'redeem'
+  type: 'deposit' | 'withdraw' | 'redeem' | 'switch'
   amount: string
   asset_symbol: string
   tx_hash: string

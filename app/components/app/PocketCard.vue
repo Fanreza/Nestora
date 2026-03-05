@@ -16,6 +16,7 @@ defineEmits<{
   click: []
   deposit: []
   withdraw: []
+  switch: []
   delete: []
 }>()
 
@@ -221,6 +222,15 @@ function displayUsd(value: number): string {
         >
           <Icon name="lucide:arrow-up-from-line" class="w-3.5 h-3.5 mr-1" />
           Cash Out
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          class="h-8 w-8 p-0 text-muted-foreground hover:text-primary"
+          title="Switch vault"
+          @click.stop="$emit('switch')"
+        >
+          <Icon name="lucide:repeat-2" class="w-3.5 h-3.5" />
         </Button>
         <Button
           size="sm"
