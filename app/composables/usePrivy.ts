@@ -32,6 +32,9 @@ watch(loginMethod, (val) => {
   else localStorage.removeItem('nestora_login_method')
 })
 
+// Builder Code (ERC-8021) — appended to all transactions for attribution
+const BUILDER_CODE_SUFFIX: `0x${string}` = '0x62635f676c3577666872690b0080218021802180218021802180218021'
+
 // Cached clients
 let _walletClient: WalletClient | null = null
 let _publicClient: PublicClient | null = null
@@ -145,6 +148,7 @@ export function usePrivyAuth() {
         account: address.value,
         chain: base,
         transport: custom(_externalProvider),
+        dataSuffix: BUILDER_CODE_SUFFIX,
       })
       return _walletClient
     }
@@ -166,6 +170,7 @@ export function usePrivyAuth() {
         account: address.value,
         chain: base,
         transport: custom(wrapProvider(_embeddedProvider)),
+        dataSuffix: BUILDER_CODE_SUFFIX,
       })
     } else {
       throw new Error('No wallet provider available')
