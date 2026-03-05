@@ -155,6 +155,47 @@ async function handleSwitchVault(toStrategyKey: StrategyKey) {
   }
 }
 
+
+// ---- Schedule dialog ----
+const showScheduleDialog = ref(false)
+const schedulePocket = ref<DbPocket | null>(null)
+const savingSchedule = ref(false)
+
+function openScheduleDialog(pocket: DbPocket) {
+  schedulePocket.value = pocket
+  showScheduleDialog.value = true
+}
+
+async function handleSaveSchedule(payload: { recurring_day: number; recurring_amount: string; recurring_next_due: string }) {
+  if (!schedulePocket.value) return
+  savingSchedule.value = true
+  try {
+    await profileStore.updatePocket(schedulePocket.value.id, payload)
+    await profileStore.refreshPockets()
+    showScheduleDialog.value = false
+    toast.success('Deposit reminder set!')
+  } finally {
+    savingSchedule.value = false
+  }
+}
+
+async function handleRemoveSchedule() {
+  if (!schedulePocket.value) return
+  savingSchedule.value = true
+  try {
+    await profileStore.updatePocket(schedulePocket.value.id, {
+      recurring_day: null,
+      recurring_amount: null,
+      recurring_next_due: null,
+    })
+    await profileStore.refreshPockets()
+    showScheduleDialog.value = false
+    toast.success('Deposit reminder removed')
+  } finally {
+    savingSchedule.value = false
+  }
+}
+
 // ---- Delete pocket ----
 const deleteDialogRef = ref<InstanceType<typeof import('~/components/app/DeletePocketDialog.vue').default> | null>(null)
 const showDeleteConfirm = ref(false)
@@ -306,6 +347,7 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
           @click="navigateTo(`/pocket/${pocket.id}`)"
           @deposit="openDepositDialog(pocket, 'deposit')"
           @withdraw="openDepositDialog(pocket, 'withdraw')"
+          @schedule="openScheduleDialog(pocket)"
           @switch="openSwitchDialog(pocket)"
           @delete="deleteDialogRef?.requestDelete(pocket)"
         />
@@ -381,6 +423,15 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
       v-model:open="showDeleteConfirm"
       :pocket-positions="pocketPositions"
       @confirmed="handlePocketDeleted"
+    />
+
+    <AppScheduleDialog
+      v-model:open="showScheduleDialog"
+      :pocket="schedulePocket"
+      :asset-price="schedulePocket ? profileStore.getAssetPrice(schedulePocket.strategy_key) : 0"
+      :saving="savingSchedule"
+      @save="handleSaveSchedule"
+      @remove="handleRemoveSchedule"
     />
 
     <AppFundWalletDialog

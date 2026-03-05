@@ -18,6 +18,7 @@ defineEmits<{
   withdraw: []
   switch: []
   delete: []
+  schedule: []
 }>()
 
 const RISK_LABELS: Record<string, { label: string; icon: string; color: string }> = {
@@ -97,6 +98,19 @@ const timelineDisplay = computed(() => {
   if (diffDays < 0) return { date: dateStr, remaining: 'Past due' }
   if (diffDays === 0) return { date: dateStr, remaining: 'Today' }
   return { date: dateStr, remaining: `${diffDays}d left` }
+})
+
+const reminderBanner = computed(() => {
+  if (!props.pocket.recurring_next_due) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(props.pocket.recurring_next_due + 'T00:00:00')
+  const days = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+  if (days <= 0) return { label: days < 0 ? 'Deposit overdue' : 'Deposit due today', level: 'urgent' as const }
+  if (days <= 1) return { label: 'Deposit due tomorrow', level: 'warning' as const }
+  if (days <= 7) return { label: `Deposit in ${days} days`, level: 'info' as const }
+  return null
 })
 
 function displayUsd(value: number): string {
@@ -203,6 +217,54 @@ function displayUsd(value: number): string {
         </div>
       </div>
 
+      <!-- Reminder banner -->
+      <div
+        v-if="reminderBanner"
+        class="rounded-lg p-2.5 mb-3 flex items-center justify-between gap-2"
+        :class="{
+          'bg-red-500/10 border border-red-500/30': reminderBanner.level === 'urgent',
+          'bg-amber-500/10 border border-amber-500/30': reminderBanner.level === 'warning',
+          'bg-primary/5 border border-primary/20': reminderBanner.level === 'info',
+        }"
+      >
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5">
+            <Icon
+              :name="reminderBanner.level === 'urgent' ? 'lucide:alert-circle' : reminderBanner.level === 'warning' ? 'lucide:alert-triangle' : 'lucide:bell'"
+              class="w-3.5 h-3.5 shrink-0"
+              :class="{
+                'text-red-500': reminderBanner.level === 'urgent',
+                'text-amber-500': reminderBanner.level === 'warning',
+                'text-primary': reminderBanner.level === 'info',
+              }"
+            />
+            <span
+              class="text-xs font-medium truncate"
+              :class="{
+                'text-red-500': reminderBanner.level === 'urgent',
+                'text-amber-500': reminderBanner.level === 'warning',
+                'text-primary': reminderBanner.level === 'info',
+              }"
+            >{{ reminderBanner.label }}</span>
+          </div>
+          <p class="text-[10px] text-muted-foreground mt-0.5 ml-5">Stay on track with your savings goal</p>
+        </div>
+        <Button
+          v-if="reminderBanner.level === 'urgent'"
+          size="sm"
+          class="h-6 text-[10px] px-2 shrink-0"
+          @click.stop="$emit('deposit')"
+        >
+          Deposit Now
+        </Button>
+      </div>
+
+      <!-- Schedule badge -->
+      <div v-else-if="pocket.recurring_day != null" class="flex items-center gap-1.5 text-xs text-muted-foreground mb-3">
+        <Icon name="lucide:bell" class="w-3.5 h-3.5 text-primary" />
+        <span>{{ pocket.recurring_amount }} {{ strategy?.assetSymbol }} / month</span>
+      </div>
+
       <!-- Actions (always visible) -->
       <div class="flex items-center gap-2 pt-2 border-t border-border/50">
         <Button
@@ -222,6 +284,16 @@ function displayUsd(value: number): string {
         >
           <Icon name="lucide:arrow-up-from-line" class="w-3.5 h-3.5 mr-1" />
           Cash Out
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          class="h-8 w-8 p-0"
+          :class="pocket.recurring_day != null ? 'text-primary hover:text-primary/80' : 'text-muted-foreground hover:text-primary'"
+          title="Deposit reminder"
+          @click.stop="$emit('schedule')"
+        >
+          <Icon name="lucide:bell" class="w-3.5 h-3.5" />
         </Button>
         <Button
           size="sm"

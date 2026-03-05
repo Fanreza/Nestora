@@ -1,6 +1,7 @@
 import type { TxState } from '~/composables/useVault'
 import type { DbPocket } from '~/types/database'
 import type { Strategy } from '~/config/strategies'
+import { computeNextDue } from '~/composables/useDepositReminders'
 
 export interface TransactionRecorderDeps {
   txState: Ref<TxState>
@@ -32,6 +33,15 @@ export function useTransactionRecorder(deps: TransactionRecorderDeps) {
           tx_hash: deps.txHash.value,
           timestamp: Math.floor(Date.now() / 1000),
         })
+      }
+
+      // Advance recurring schedule if this was a deposit on a scheduled pocket
+      if (deps.lastTxType.value === 'deposit' && deps.selectedPocket.value?.recurring_day != null) {
+        const nextDue = computeNextDue(deps.selectedPocket.value.recurring_day, new Date())
+        await $fetch(`/api/pockets/${deps.selectedPocket.value.id}`, {
+          method: 'PATCH',
+          body: { recurring_next_due: nextDue },
+        }).catch(() => {})
       }
 
       // Close dialog after showing "All done!" for 1.5s

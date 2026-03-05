@@ -14,6 +14,9 @@ export interface DbPocket {
   timeline: string | null
   target_amount: number | null
   strategy_key: string
+  recurring_day: number | null
+  recurring_amount: string | null
+  recurring_next_due: string | null
   created_at: string
   updated_at: string
 }
@@ -33,6 +36,9 @@ export interface UpdatePocketInput {
   timeline?: string
   target_amount?: number
   strategy_key?: string
+  recurring_day?: number | null
+  recurring_amount?: string | null
+  recurring_next_due?: string | null
 }
 
 export interface DbTransaction {
