@@ -107,9 +107,17 @@ export function useVault() {
       )
 
       if (!hasAllowance) {
-        const approveResult = await client.approve(strategy.assetAddress, amount)
-        // Wait for approve to confirm before depositing
-        await client.waitForTransaction(approveResult.hash)
+        const approveTx = client.prepareApprove({
+          token: strategy.assetAddress,
+          spender: YO_GATEWAY_ADDRESS as `0x${string}`,
+          amount,
+        })
+        const approveHash = await sendTx({
+          to: approveTx.to,
+          data: approveTx.data,
+          value: approveTx.value,
+        })
+        await client.waitForTransaction(approveHash)
       }
 
       txState.value = 'awaiting_signature'
@@ -188,8 +196,17 @@ export function useVault() {
     )
 
     if (!hasAllowance) {
-      const approveResult = await client.approve(strategy.vaultAddress, shares)
-      await client.waitForTransaction(approveResult.hash)
+      const approveTx = client.prepareApprove({
+        token: strategy.vaultAddress as `0x${string}`,
+        spender: YO_GATEWAY_ADDRESS as `0x${string}`,
+        amount: shares,
+      })
+      const approveHash = await sendTx({
+        to: approveTx.to,
+        data: approveTx.data,
+        value: approveTx.value,
+      })
+      await client.waitForTransaction(approveHash)
     }
 
     txState.value = 'awaiting_signature'
