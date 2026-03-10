@@ -36,7 +36,8 @@ const pocketCount = computed(() => pockets.value.length)
 
 // ---- Balances & Vault ----
 const { ethBalance, fetchBalances, loading: loadingBalances } = useBalances()
-const { txState, txHash, txError, deposit, redeem, zapDeposit, switchVault, reset } = useVault()
+const { txState, txHash, txError, deposit, redeem, zapDeposit, switchVault, getClaimableRewards, claimRewards, reset } = useVault()
+import type { RewardsInfo } from '~/composables/useVault'
 const { getZapQuote, getWalletBalances, NATIVE_TOKEN } = useEnso()
 const { getTokenPrices } = useCoinGecko()
 
@@ -226,6 +227,47 @@ watch(isConnected, (connected) => {
   if (connected) fetchWalletTokens()
 }, { immediate: true })
 
+// ---- Merkl Rewards ----
+const rewardsInfo = ref<RewardsInfo>({ rewards: [], hasClaimable: false, raw: null })
+const loadingRewards = ref(false)
+const claimingRewards = ref(false)
+
+async function fetchRewards() {
+  loadingRewards.value = true
+  try {
+    rewardsInfo.value = await getClaimableRewards()
+  } finally {
+    loadingRewards.value = false
+  }
+}
+
+async function handleClaimRewards() {
+  if (!rewardsInfo.value.raw) return
+  claimingRewards.value = true
+  try {
+    await claimRewards(rewardsInfo.value.raw)
+    if (txState.value === 'confirmed') {
+      toast.success('Rewards claimed!')
+      await fetchRewards()
+      reset()
+    }
+  } finally {
+    claimingRewards.value = false
+  }
+}
+
+// Fetch rewards when address changes (covers connect + wallet switch)
+// Delayed to avoid rate-limiting the public RPC alongside position fetches
+let rewardsTimeout: ReturnType<typeof setTimeout> | null = null
+watch(address, (addr) => {
+  if (rewardsTimeout) clearTimeout(rewardsTimeout)
+  if (addr) {
+    rewardsTimeout = setTimeout(() => fetchRewards(), 3000)
+  } else {
+    rewardsInfo.value = { rewards: [], hasClaimable: false, raw: null }
+  }
+}, { immediate: true })
+
 // ---- Helpers ----
 const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parseUnits('0.0005', 18))
 </script>
@@ -268,6 +310,57 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
           You have funds ready to deposit into your pockets.
         </AlertDescription>
       </Alert>
+
+      <!-- Merkl Rewards -->
+      <div
+        v-if="loadingRewards && !rewardsInfo.hasClaimable"
+        class="mb-4 rounded-xl border border-border/50 bg-muted/30 p-4"
+      >
+        <div class="flex items-center gap-3">
+          <Skeleton class="w-10 h-10 rounded-xl shrink-0" />
+          <div class="space-y-2 flex-1">
+            <Skeleton class="h-4 w-32" />
+            <Skeleton class="h-3 w-48" />
+          </div>
+        </div>
+      </div>
+
+      <div
+        v-if="rewardsInfo.hasClaimable"
+        class="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4"
+      >
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <img
+              src="https://storage.googleapis.com/merkl-static-assets/tokens/YO.svg"
+              alt="YO"
+              class="w-10 h-10 rounded-xl shrink-0"
+            >
+            <div>
+              <p class="text-sm font-semibold">Rewards available</p>
+              <div class="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                <span
+                  v-for="r in rewardsInfo.rewards"
+                  :key="r.tokenAddress"
+                  class="text-xs text-muted-foreground font-mono"
+                >
+                  {{ r.claimableFormatted }} {{ r.tokenSymbol }}
+                </span>
+              </div>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            class="shrink-0 bg-amber-500 text-white hover:bg-amber-600"
+            :disabled="claimingRewards || (txState !== 'idle' && txState !== 'confirmed' && txState !== 'failed')"
+            @click="handleClaimRewards"
+          >
+            <Icon v-if="claimingRewards" name="lucide:loader-2" class="w-3.5 h-3.5 mr-1.5 animate-spin" />
+            <Icon v-else name="lucide:sparkles" class="w-3.5 h-3.5 mr-1.5" />
+            Claim
+          </Button>
+        </div>
+      </div>
 
       <!-- Portfolio summary -->
       <div class="mb-8">

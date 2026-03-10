@@ -5,6 +5,7 @@ import type { DbPocket } from '~/types/database'
 import type { TxState } from '~/composables/useVault'
 import type { ZapQuote } from '~/composables/useEnso'
 import type { WalletToken } from '~/composables/useWalletTokens'
+import { useVault } from '~/composables/useVault'
 
 // ---- Props ----
 const props = defineProps<{
@@ -123,6 +124,44 @@ const canSubmit = computed(() => {
   if (mode.value === 'withdraw') return parsedAmount.value > 0n
   if (isDirectDeposit.value) return parsedAmount.value > 0n
   return !!props.zapQuote
+})
+
+// ---- Preview estimates ----
+const { previewDeposit, previewRedeem } = useVault()
+const previewValue = ref<bigint>(0n)
+const loadingPreview = ref(false)
+let previewTimer: ReturnType<typeof setTimeout> | null = null
+
+const previewFormatted = computed(() => {
+  if (!strategy.value || previewValue.value === 0n) return ''
+  const val = Number(previewValue.value) / Math.pow(10, strategy.value.decimals)
+  if (val < 0.000001) return '<0.000001'
+  if (val < 1) return val.toPrecision(4)
+  return val.toLocaleString('en-US', { maximumFractionDigits: 6 })
+})
+
+watch([amount, mode], () => {
+  if (previewTimer) clearTimeout(previewTimer)
+  previewValue.value = 0n
+  if (!strategy.value || !amount.value || parsedAmount.value === 0n) return
+
+  // Only preview for direct deposits (not zap) and withdrawals
+  if (mode.value === 'deposit' && !isDirectDeposit.value) return
+
+  loadingPreview.value = true
+  previewTimer = setTimeout(async () => {
+    try {
+      if (mode.value === 'deposit') {
+        previewValue.value = await previewDeposit(strategy.value!, parsedAmount.value)
+      } else {
+        previewValue.value = await previewRedeem(strategy.value!, parsedAmount.value)
+      }
+    } catch {
+      previewValue.value = 0n
+    } finally {
+      loadingPreview.value = false
+    }
+  }, 500)
 })
 
 const isTxActive = computed(() =>
@@ -606,6 +645,30 @@ defineExpose({ openFor })
           <p v-if="!loadingPosition && position.shares === 0n" class="text-xs text-muted-foreground text-center py-2">
             No funds to withdraw yet. Deposit first to start earning.
           </p>
+        </div>
+
+        <!-- Preview estimate (direct deposit) -->
+        <div
+          v-if="mode === 'deposit' && isDirectDeposit && previewFormatted && txState === 'idle'"
+          class="p-3 bg-muted rounded-lg flex items-center justify-between"
+        >
+          <span class="text-xs text-muted-foreground">You'll receive</span>
+          <span class="text-sm font-medium font-mono">
+            <Icon v-if="loadingPreview" name="lucide:loader-2" class="w-3.5 h-3.5 animate-spin inline mr-1" />
+            ~{{ previewFormatted }} {{ strategy?.vaultSymbol }}
+          </span>
+        </div>
+
+        <!-- Preview estimate (withdraw) -->
+        <div
+          v-if="mode === 'withdraw' && previewFormatted && txState === 'idle'"
+          class="p-3 bg-muted rounded-lg flex items-center justify-between"
+        >
+          <span class="text-xs text-muted-foreground">You'll receive</span>
+          <span class="text-sm font-medium font-mono">
+            <Icon v-if="loadingPreview" name="lucide:loader-2" class="w-3.5 h-3.5 animate-spin inline mr-1" />
+            ~{{ previewFormatted }} {{ strategy?.assetSymbol }}
+          </span>
         </div>
 
         <!-- Zap route preview -->

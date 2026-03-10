@@ -1,7 +1,8 @@
 import { usePrivyAuth } from '~/composables/usePrivy'
 import type { Strategy } from '~/config/strategies'
 import { useEnso } from './useEnso'
-import { createYoClient, YO_GATEWAY_ADDRESS } from '@yo-protocol/core'
+import { createYoClient, YO_GATEWAY_ADDRESS, formatTokenAmount } from '@yo-protocol/core'
+import type { MerklChainRewards } from '@yo-protocol/core'
 import { encodeFunctionData, parseAbi } from 'viem'
 
 export interface VaultSnapshotResult {
@@ -24,6 +25,25 @@ export interface UserHistoryEntry {
 export interface UserPerformanceResult {
   realized: { raw: string; formatted: string }
   unrealized: { raw: string; formatted: string }
+}
+
+export interface PreviewResult {
+  shares: bigint
+  assets: bigint
+}
+
+export interface ClaimableReward {
+  tokenAddress: string
+  tokenSymbol: string
+  tokenDecimals: number
+  claimable: bigint
+  claimableFormatted: string
+}
+
+export interface RewardsInfo {
+  rewards: ClaimableReward[]
+  hasClaimable: boolean
+  raw: MerklChainRewards | null
 }
 
 export type TxState =
@@ -493,6 +513,91 @@ export function useVault() {
     }
   }
 
+  // ---- Preview Deposit/Redeem (estimates before tx) ----
+  async function previewDeposit(strategy: Strategy, amount: bigint): Promise<bigint> {
+    if (amount === 0n) return 0n
+    try {
+      const client = getReadClient()
+      return await client.previewDeposit(strategy.vaultAddress, amount)
+    } catch (e) {
+      console.error(`[vault] previewDeposit(${strategy.vaultSymbol}) failed:`, e)
+      return 0n
+    }
+  }
+
+  async function previewRedeem(strategy: Strategy, shares: bigint): Promise<bigint> {
+    if (shares === 0n) return 0n
+    try {
+      const client = getReadClient()
+      return await client.previewRedeem(strategy.vaultAddress, shares)
+    } catch (e) {
+      console.error(`[vault] previewRedeem(${strategy.vaultSymbol}) failed:`, e)
+      return 0n
+    }
+  }
+
+  // ---- Merkl Rewards ----
+  async function getClaimableRewards(): Promise<RewardsInfo> {
+    const empty: RewardsInfo = { rewards: [], hasClaimable: false, raw: null }
+    if (!address.value) return empty
+    try {
+      const client = getReadClient()
+      const chainRewards = await client.getClaimableRewards(address.value)
+      if (!chainRewards || !client.hasMerklClaimableRewards(chainRewards)) {
+        return empty
+      }
+
+      const rewards: ClaimableReward[] = []
+      for (const r of chainRewards.rewards) {
+        const claimable = client.getMerklClaimableAmount(r)
+        if (claimable > 0n) {
+          rewards.push({
+            tokenAddress: r.token.address,
+            tokenSymbol: r.token.symbol,
+            tokenDecimals: r.token.decimals,
+            claimable,
+            claimableFormatted: formatTokenAmount(claimable, r.token.decimals),
+          })
+        }
+      }
+
+      return { rewards, hasClaimable: rewards.length > 0, raw: chainRewards }
+    } catch (e) {
+      console.error('[vault] getClaimableRewards failed:', e)
+      return empty
+    }
+  }
+
+  async function claimRewards(chainRewards: MerklChainRewards) {
+    if (!address.value) return
+    try {
+      txState.value = 'awaiting_signature'
+      txError.value = ''
+      txHash.value = null
+
+      const client = await getYoClient()
+      const preparedTx = client.prepareClaimMerklRewards(address.value, chainRewards)
+
+      const hash = await sendTx({
+        to: preparedTx.to as `0x${string}`,
+        data: preparedTx.data as `0x${string}`,
+        value: preparedTx.value,
+      })
+
+      txHash.value = hash
+      txState.value = 'pending'
+
+      const publicClient = getPublicClient()
+      const receipt = await publicClient.waitForTransactionReceipt({ hash })
+      txState.value = receipt.status === 'success' ? 'confirmed' : 'failed'
+      if (receipt.status !== 'success') txError.value = 'Claim transaction reverted'
+    } catch (e: any) {
+      console.error('[useVault] claimRewards error:', e)
+      txState.value = 'failed'
+      txError.value = e.shortMessage || e.message || 'Claim failed'
+    }
+  }
+
   function reset() {
     txState.value = 'idle'
     txHash.value = null
@@ -515,6 +620,10 @@ export function useVault() {
     getVaultSnapshot,
     getUserHistory,
     getUserPerformance,
+    previewDeposit,
+    previewRedeem,
+    getClaimableRewards,
+    claimRewards,
     reset,
   }
 }

@@ -118,7 +118,7 @@ export function usePrivyAuth() {
               from,
               to: params.to,
               data: params.data,
-              value: params.value || '0x0',
+              value: params.value ? (typeof params.value === 'bigint' ? numberToHex(params.value) : params.value) : '0x0',
               nonce: numberToHex(nonce),
               chainId: numberToHex(8453),
               type: 2,
@@ -138,9 +138,13 @@ export function usePrivyAuth() {
 
   // ---- Wallet client (write operations) ----
   async function getWalletClient(): Promise<WalletClient> {
-    if (_walletClient) return _walletClient
-
     if (!address.value) throw new Error('Not authenticated')
+
+    // External providers can be cached safely
+    if (_walletClient && _externalProvider) return _walletClient
+
+    // For embedded wallets, always get fresh provider to avoid stale session errors
+    _walletClient = null
 
     // External provider first: Farcaster mini app, MetaMask, Coinbase, etc.
     if (_externalProvider) {
@@ -153,23 +157,24 @@ export function usePrivyAuth() {
       return _walletClient
     }
 
-    // Privy embedded wallet
+    // Privy embedded wallet — always get fresh provider to avoid stale "from" mismatch
     if (!privyUser.value) throw new Error('Not authenticated')
     const embeddedWallet = getUserEmbeddedEthereumWallet(privyUser.value)
     if (embeddedWallet) {
       const entropy = getEntropyDetailsFromUser(privyUser.value)
       if (!entropy) throw new Error('Cannot derive entropy for embedded wallet')
 
-      _embeddedProvider = await privy.embeddedWallet.getEthereumProvider({
+      const provider = await privy.embeddedWallet.getEthereumProvider({
         wallet: embeddedWallet,
         entropyId: entropy.entropyId,
         entropyIdVerifier: entropy.entropyIdVerifier,
       })
+      _embeddedProvider = provider
 
       _walletClient = createWalletClient({
         account: address.value,
         chain: base,
-        transport: custom(wrapProvider(_embeddedProvider)),
+        transport: custom(wrapProvider(provider)),
         dataSuffix: BUILDER_CODE_SUFFIX,
       })
     } else {
@@ -255,6 +260,9 @@ export function usePrivyAuth() {
     privyUser.value = user
     isAuthenticated.value = true
 
+    // Check if user previously switched to a different address in their wallet
+    const savedActive = localStorage.getItem('nestora_active_address')
+
     // Get address from embedded wallet first
     const embeddedWallet = getUserEmbeddedEthereumWallet(user)
     if (embeddedWallet) {
@@ -262,7 +270,13 @@ export function usePrivyAuth() {
       return
     }
 
-    // Fallback: get address from linked external wallet (SIWE login)
+    // For external wallets: use persisted active address if available,
+    // otherwise fall back to the address from Privy's linked accounts
+    if (savedActive) {
+      address.value = getAddress(savedActive) as `0x${string}`
+      return
+    }
+
     const externalWallet = user.linked_accounts?.find(
       (a: any) => a.type === 'wallet' && a.chain_type === 'ethereum' && a.address,
     )
@@ -410,9 +424,15 @@ export function usePrivyAuth() {
       logout()
       return
     }
-    address.value = getAddress(accounts[0]) as `0x${string}`
-    // Clear cached wallet client so it's recreated with new account
+    const newAddress = getAddress(accounts[0]) as `0x${string}`
+    if (newAddress === address.value) return
+
+    // Update address and clear cached wallet client so it's recreated with new account
+    address.value = newAddress
     _walletClient = null
+
+    // Persist active address so session restore uses the switched address
+    localStorage.setItem('nestora_active_address', newAddress)
   }
 
   // ---- Auth: Connect any EIP-1193 provider (used by wallet picker) ----
@@ -531,6 +551,7 @@ export function usePrivyAuth() {
     }
     _externalProvider = null
     localStorage.removeItem('nestora_wallet_rdns')
+    localStorage.removeItem('nestora_active_address')
   }
 
   return {
