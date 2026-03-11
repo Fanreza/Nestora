@@ -21,17 +21,21 @@ const props = defineProps<{
   zapQuote: ZapQuote | null
   nativeToken: string
   assetPrice: number
+  withdrawZapQuote: ZapQuote | null
+  fetchingWithdrawQuote: boolean
+  isDirectWithdraw: boolean
 }>()
 
 const open = defineModel<boolean>('open', { required: true })
 
 const emit = defineEmits<{
   deposit: [payload: { tokenIn: `0x${string}`; amount: string; isDirect: boolean }]
-  withdraw: [amount: string]
+  withdraw: [payload: { amount: string; tokenOut?: `0x${string}` }]
   reset: []
   fetchTokens: []
   fetchPosition: []
   selectToken: [token: `0x${string}`]
+  selectWithdrawToken: [token: `0x${string}`]
   updateAmount: [amount: string]
   changeMode: [mode: 'deposit' | 'withdraw']
 }>()
@@ -41,6 +45,7 @@ const mode = ref<'deposit' | 'withdraw'>('deposit')
 const view = ref<'select-token' | 'amount'>('select-token')
 const amount = ref('')
 const selectedTokenAddr = ref<`0x${string}` | null>(null)
+const selectedWithdrawTokenAddr = ref<`0x${string}` | null>(null)
 const tokenSearch = ref('')
 
 // ---- Computed ----
@@ -70,6 +75,13 @@ const selectedTokenBalance = computed<WalletToken | null>(() => {
   if (!selectedTokenAddr.value) return null
   return props.walletTokens.find(
     t => t.token?.toLowerCase() === selectedTokenAddr.value?.toLowerCase(),
+  ) ?? null
+})
+
+const selectedWithdrawTokenInfo = computed<WalletToken | null>(() => {
+  if (!selectedWithdrawTokenAddr.value) return null
+  return props.walletTokens.find(
+    t => t.token?.toLowerCase() === selectedWithdrawTokenAddr.value?.toLowerCase(),
   ) ?? null
 })
 
@@ -121,7 +133,12 @@ const parsedAmount = computed(() => {
 const canSubmit = computed(() => {
   if (props.txState !== 'idle') return false
   if (!amount.value) return false
-  if (mode.value === 'withdraw') return parsedAmount.value > 0n
+  if (mode.value === 'withdraw') {
+    if (parsedAmount.value === 0n) return false
+    // If zap withdraw token selected and it's not direct, need a quote
+    if (selectedWithdrawTokenAddr.value && !props.isDirectWithdraw) return !!props.withdrawZapQuote
+    return true
+  }
   if (isDirectDeposit.value) return parsedAmount.value > 0n
   return !!props.zapQuote
 })
@@ -270,11 +287,19 @@ function setWithdrawPercent(pct: number) {
   amount.value = formatUnits(portion, strategy.value.decimals)
 }
 
+function selectWithdrawToken(token: WalletToken) {
+  selectedWithdrawTokenAddr.value = token.token as `0x${string}`
+  amount.value = ''
+  view.value = 'amount'
+  emit('selectWithdrawToken', token.token as `0x${string}`)
+}
+
 function resetForm() {
   mode.value = 'deposit'
   view.value = 'select-token'
   amount.value = ''
   selectedTokenAddr.value = null
+  selectedWithdrawTokenAddr.value = null
   tokenSearch.value = ''
 }
 
@@ -289,7 +314,8 @@ function switchMode(newMode: 'deposit' | 'withdraw') {
   mode.value = newMode
   amount.value = ''
   selectedTokenAddr.value = null
-  view.value = 'amount'
+  selectedWithdrawTokenAddr.value = null
+  view.value = newMode === 'withdraw' ? 'amount' : 'select-token'
   emit('changeMode', newMode)
   emit('reset')
   if (newMode === 'deposit') autoSelectToken()
@@ -301,7 +327,10 @@ function handleAction() {
     return
   }
   if (mode.value === 'withdraw') {
-    emit('withdraw', amount.value)
+    emit('withdraw', {
+      amount: amount.value,
+      tokenOut: selectedWithdrawTokenAddr.value || undefined,
+    })
   } else {
     emit('deposit', {
       tokenIn: selectedTokenAddr.value!,
@@ -641,6 +670,41 @@ defineExpose({ openFor })
             </button>
           </div>
 
+          <!-- Withdraw to token selector -->
+          <div v-if="!loadingPosition && position.shares > 0n">
+            <p class="text-xs font-medium text-muted-foreground mb-2">Withdraw to</p>
+            <div class="flex gap-2 flex-wrap">
+              <!-- Default: vault underlying asset -->
+              <button
+                class="flex items-center gap-2 px-3 py-2 rounded-lg border transition-all"
+                :class="!selectedWithdrawTokenAddr ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/30 hover:bg-primary/5'"
+                :disabled="txState !== 'idle'"
+                @click="selectedWithdrawTokenAddr = null; emit('selectWithdrawToken', strategy!.assetAddress as `0x${string}`)"
+              >
+                <span class="text-sm font-medium">{{ strategy!.assetSymbol }}</span>
+                <span class="text-[10px] text-muted-foreground">Default</span>
+              </button>
+              <!-- Other wallet tokens -->
+              <button
+                v-for="t in availableTokens.filter(tok => !isDirectToken(tok.token)).slice(0, 5)"
+                :key="t.token"
+                class="flex items-center gap-2 px-3 py-2 rounded-lg border transition-all"
+                :class="selectedWithdrawTokenAddr?.toLowerCase() === t.token.toLowerCase() ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/30 hover:bg-primary/5'"
+                :disabled="txState !== 'idle'"
+                @click="selectWithdrawToken(t)"
+              >
+                <img
+                  v-if="t.logoUri"
+                  :src="t.logoUri"
+                  :alt="t.symbol"
+                  class="w-4 h-4 rounded-full"
+                  @error="($event.target as HTMLImageElement).style.display = 'none'"
+                >
+                <span class="text-sm font-medium">{{ t.symbol }}</span>
+              </button>
+            </div>
+          </div>
+
           <!-- No balance notice -->
           <p v-if="!loadingPosition && position.shares === 0n" class="text-xs text-muted-foreground text-center py-2">
             No funds to withdraw yet. Deposit first to start earning.
@@ -659,9 +723,9 @@ defineExpose({ openFor })
           </span>
         </div>
 
-        <!-- Preview estimate (withdraw) -->
+        <!-- Preview estimate (withdraw - direct) -->
         <div
-          v-if="mode === 'withdraw' && previewFormatted && txState === 'idle'"
+          v-if="mode === 'withdraw' && isDirectWithdraw && previewFormatted && txState === 'idle'"
           class="p-3 bg-muted rounded-lg flex items-center justify-between"
         >
           <span class="text-xs text-muted-foreground">You'll receive</span>
@@ -669,6 +733,26 @@ defineExpose({ openFor })
             <Icon v-if="loadingPreview" name="lucide:loader-2" class="w-3.5 h-3.5 animate-spin inline mr-1" />
             ~{{ previewFormatted }} {{ strategy?.assetSymbol }}
           </span>
+        </div>
+
+        <!-- Zap withdraw route preview -->
+        <div
+          v-if="withdrawZapQuote && !isDirectWithdraw && mode === 'withdraw'"
+          class="p-3 bg-muted rounded-lg space-y-1"
+        >
+          <p class="text-xs text-muted-foreground">Route preview</p>
+          <p class="text-sm">
+            Redeem → swap to {{ selectedWithdrawTokenInfo?.symbol || 'token' }}
+          </p>
+          <p class="text-xs text-muted-foreground font-mono">
+            Expected: ~{{ displayNum(formatUnits(BigInt(withdrawZapQuote.amountOut), selectedWithdrawTokenInfo?.decimals ?? 18), 4) }}
+            {{ selectedWithdrawTokenInfo?.symbol }}
+          </p>
+        </div>
+
+        <div v-if="fetchingWithdrawQuote" class="flex items-center gap-2 text-xs text-muted-foreground">
+          <Icon name="lucide:loader-2" class="w-3.5 h-3.5 animate-spin" />
+          Finding best withdrawal route...
         </div>
 
         <!-- Zap route preview -->

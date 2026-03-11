@@ -369,6 +369,73 @@ export function useVault() {
     }
   }
 
+  // ---- Zap Withdraw (redeem vault → any token via Enso) ----
+  async function zapWithdraw(strategy: Strategy, shares: bigint, tokenOut: `0x${string}`) {
+    if (!address.value || shares === 0n) return
+    const { getApprovalTx } = useEnso()
+
+    try {
+      txState.value = 'preparing'
+      txError.value = ''
+      txHash.value = null
+
+      // Get Enso route: vault token → desired output token
+      const quote = await $fetch<any>('/api/enso/route', {
+        method: 'POST',
+        body: {
+          fromAddress: address.value,
+          amountIn: shares.toString(),
+          tokenIn: strategy.vaultAddress,
+          tokenOut,
+          slippage: '300',
+        },
+      })
+
+      if (!quote?.tx) {
+        txError.value = 'Could not find a route for this withdrawal'
+        txState.value = 'failed'
+        return
+      }
+
+      // Approve vault shares to Enso router
+      txState.value = 'approving'
+      const approval = await getApprovalTx(
+        strategy.vaultAddress as `0x${string}`,
+        shares.toString(),
+        address.value,
+      )
+      if (approval?.tx) {
+        const approveHash = await sendTx({
+          to: approval.tx.to as `0x${string}`,
+          data: approval.tx.data as `0x${string}`,
+          value: BigInt(approval.tx.value || '0'),
+        })
+        const publicClient = getPublicClient()
+        await publicClient.waitForTransactionReceipt({ hash: approveHash })
+      }
+
+      // Execute the zap withdraw
+      txState.value = 'awaiting_signature'
+      const hash = await sendTx({
+        to: quote.tx.to as `0x${string}`,
+        data: quote.tx.data as `0x${string}`,
+        value: BigInt(quote.tx.value || '0'),
+      })
+
+      txHash.value = hash
+      txState.value = 'pending'
+
+      const publicClient = getPublicClient()
+      const receipt = await publicClient.waitForTransactionReceipt({ hash })
+      txState.value = receipt.status === 'success' ? 'confirmed' : 'failed'
+      if (receipt.status !== 'success') txError.value = 'Transaction reverted'
+    } catch (e: any) {
+      console.error('[useVault] zapWithdraw error:', e)
+      txState.value = 'failed'
+      txError.value = e.shortMessage || e.message || 'Withdrawal failed'
+    }
+  }
+
   // ---- Vault Snapshot (APY data) ----
   // Call Yo API directly — the SDK's Zod schema has a bug where
   // idleBalances[].raw is expected as string but API returns number
@@ -613,6 +680,7 @@ export function useVault() {
     deposit,
     redeem,
     zapDeposit,
+    zapWithdraw,
     switchVault,
     estimateDepositGas,
     getShareBalance,

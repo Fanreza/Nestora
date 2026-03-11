@@ -9,8 +9,10 @@ export interface DepositFlowDeps {
   deposit: (strategy: Strategy, amount: bigint) => Promise<void>
   redeem: (strategy: Strategy, amount: bigint) => Promise<void>
   zapDeposit: (strategy: Strategy, tokenIn: `0x${string}`, amountWei: string) => Promise<void>
+  zapWithdraw: (strategy: Strategy, shares: bigint, tokenOut: `0x${string}`) => Promise<void>
   reset: () => void
   getZapQuote: (tokenIn: `0x${string}`, strategy: Strategy, amountWei: string, sender: `0x${string}`) => Promise<ZapQuote | null>
+  getZapWithdrawQuote: (strategy: Strategy, tokenOut: `0x${string}`, shares: string, sender: `0x${string}`) => Promise<ZapQuote | null>
   NATIVE_TOKEN: string
   walletTokens: Ref<WalletToken[]>
   fetchWalletTokens: () => Promise<void>
@@ -26,6 +28,10 @@ export function useDepositFlow(deps: DepositFlowDeps) {
   const fetchingQuote = ref(false)
   const lastTxType = ref<'deposit' | 'withdraw' | 'redeem'>('deposit')
   const lastTxAmount = ref('')
+
+  const selectedWithdrawToken = ref<`0x${string}` | null>(null)
+  const withdrawZapQuote = ref<ZapQuote | null>(null)
+  const fetchingWithdrawQuote = ref(false)
 
   const selectedStrategy = computed(() =>
     selectedPocket.value
@@ -51,6 +57,38 @@ export function useDepositFlow(deps: DepositFlowDeps) {
       ? deps.NATIVE_TOKEN
       : selectedStrategy.value.assetAddress
     return selectedTokenIn.value.toLowerCase() === vaultAsset.toLowerCase()
+  })
+
+  const isDirectWithdraw = computed(() => {
+    if (!selectedWithdrawToken.value || !selectedStrategy.value) return true
+    const vaultAsset = selectedStrategy.value.type === 'native'
+      ? deps.NATIVE_TOKEN
+      : selectedStrategy.value.assetAddress
+    return selectedWithdrawToken.value.toLowerCase() === vaultAsset.toLowerCase()
+  })
+
+  // Withdraw quote debouncing
+  let withdrawQuoteTimeout: ReturnType<typeof setTimeout> | null = null
+  watch([selectedWithdrawToken, depositAmount], () => {
+    withdrawZapQuote.value = null
+    if (withdrawQuoteTimeout) clearTimeout(withdrawQuoteTimeout)
+    if (!selectedWithdrawToken.value || !depositAmount.value || !selectedStrategy.value || !deps.address.value) return
+    if (isDirectWithdraw.value) return
+
+    withdrawQuoteTimeout = setTimeout(async () => {
+      fetchingWithdrawQuote.value = true
+      try {
+        const shares = parseUnits(depositAmount.value, selectedStrategy.value!.decimals).toString()
+        withdrawZapQuote.value = await deps.getZapWithdrawQuote(
+          selectedStrategy.value!,
+          selectedWithdrawToken.value!,
+          shares,
+          deps.address.value!,
+        )
+      } finally {
+        fetchingWithdrawQuote.value = false
+      }
+    }, 800)
   })
 
   let quoteTimeout: ReturnType<typeof setTimeout> | null = null
@@ -97,16 +135,22 @@ export function useDepositFlow(deps: DepositFlowDeps) {
     }
   }
 
-  async function handleWithdraw(amount: string) {
+  async function handleWithdraw(payload: { amount: string; tokenOut?: `0x${string}` }) {
     const strategy = selectedStrategy.value
     if (!strategy || !deps.address.value || !selectedPocket.value) return
 
     lastTxType.value = 'redeem'
-    lastTxAmount.value = amount
+    lastTxAmount.value = payload.amount
 
-    const parsed = parseUnits(amount, strategy.decimals)
+    const parsed = parseUnits(payload.amount, strategy.decimals)
     if (parsed === 0n) return
-    await deps.redeem(strategy, parsed)
+
+    // If a non-default token is selected and we have a zap quote, use zapWithdraw
+    if (payload.tokenOut && !isDirectWithdraw.value) {
+      await deps.zapWithdraw(strategy, parsed, payload.tokenOut)
+    } else {
+      await deps.redeem(strategy, parsed)
+    }
   }
 
   function handleSelectToken(token: `0x${string}`) {
@@ -119,27 +163,40 @@ export function useDepositFlow(deps: DepositFlowDeps) {
     depositAmount.value = amount
   }
 
+  function handleSelectWithdrawToken(token: `0x${string}`) {
+    selectedWithdrawToken.value = token
+    depositAmount.value = ''
+    withdrawZapQuote.value = null
+  }
+
   function handleChangeMode(mode: 'deposit' | 'withdraw') {
     depositAmount.value = ''
     selectedTokenIn.value = null
+    selectedWithdrawToken.value = null
     zapQuote.value = null
-    if (mode === 'deposit') deps.fetchWalletTokens()
+    withdrawZapQuote.value = null
+    if (mode === 'deposit' || mode === 'withdraw') deps.fetchWalletTokens()
   }
 
   return {
     selectedPocket,
     showDepositDialog,
     selectedTokenIn,
+    selectedWithdrawToken,
     depositAmount,
     zapQuote,
+    withdrawZapQuote,
     fetchingQuote,
+    fetchingWithdrawQuote,
     lastTxType,
     lastTxAmount,
     selectedStrategy,
+    isDirectWithdraw,
     openDepositDialog,
     handleDeposit,
     handleWithdraw,
     handleSelectToken,
+    handleSelectWithdrawToken,
     handleUpdateAmount,
     handleChangeMode,
   }

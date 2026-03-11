@@ -69,6 +69,42 @@ export function useEnso() {
     }
   }
 
+  async function getZapWithdrawQuote(
+    strategy: Strategy,
+    tokenOut: `0x${string}`,
+    shares: string,
+    fromAddress: `0x${string}`,
+  ): Promise<ZapQuote | null> {
+    loading.value = true
+    error.value = ''
+
+    try {
+      const vaultAsset = tokenAddress(strategy)
+
+      // If withdrawing to the vault's underlying asset, no zap needed
+      if (tokenOut.toLowerCase() === vaultAsset.toLowerCase()) {
+        return null
+      }
+
+      return await $fetch<ZapQuote>('/api/enso/route', {
+        method: 'POST',
+        body: {
+          fromAddress,
+          amountIn: shares,
+          tokenIn: strategy.vaultAddress,
+          tokenOut,
+          slippage: '300',
+        },
+      })
+    } catch (e: any) {
+      error.value = e.message || 'Failed to get withdraw quote'
+      console.error('[useEnso] getZapWithdrawQuote error:', e)
+      return null
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function getApprovalTx(
     tokenIn: `0x${string}`,
     amount: string,
@@ -100,6 +136,7 @@ export function useEnso() {
     loading,
     error,
     getZapQuote,
+    getZapWithdrawQuote,
     getApprovalTx,
     getWalletBalances,
     NATIVE_TOKEN,

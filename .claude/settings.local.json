@@ -2,7 +2,14 @@
   "permissions": {
     "allow": [
       "Bash(npx nuxi typecheck)",
-      "WebFetch(domain:docs.base.org)"
+      "WebFetch(domain:docs.base.org)",
+      "Bash(npx kill-port:*)",
+      "Bash(lsof -ti:3000)",
+      "Bash(xargs kill:*)",
+      "Bash(netstat -ano)",
+      "Bash(ls d:/Project/nestora/.output/public/*.html)",
+      "Bash(ls d:/Project/nestora/.output/public/_*)",
+      "Bash(grep -l \"manifest.webmanifest\\\\|registerSW\" d:/Project/nestora/.output/server/chunks/**/*.mjs)"
     ]
   }
 }

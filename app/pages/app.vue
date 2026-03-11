@@ -36,9 +36,9 @@ const pocketCount = computed(() => pockets.value.length)
 
 // ---- Balances & Vault ----
 const { ethBalance, fetchBalances, loading: loadingBalances } = useBalances()
-const { txState, txHash, txError, deposit, redeem, zapDeposit, switchVault, getClaimableRewards, claimRewards, reset } = useVault()
+const { txState, txHash, txError, deposit, redeem, zapDeposit, zapWithdraw, switchVault, getClaimableRewards, claimRewards, reset } = useVault()
 import type { RewardsInfo } from '~/composables/useVault'
-const { getZapQuote, getWalletBalances, NATIVE_TOKEN } = useEnso()
+const { getZapQuote, getZapWithdrawQuote, getWalletBalances, NATIVE_TOKEN } = useEnso()
 const { getTokenPrices } = useCoinGecko()
 
 // ---- Wallet tokens ----
@@ -48,13 +48,13 @@ const { walletTokens, loadingTokens, fetchWalletTokens } = useWalletTokens(
 
 // ---- Deposit / Withdraw flow ----
 const {
-  selectedPocket, showDepositDialog, zapQuote, fetchingQuote,
-  selectedStrategy, lastTxType, lastTxAmount,
+  selectedPocket, showDepositDialog, zapQuote, withdrawZapQuote, fetchingQuote, fetchingWithdrawQuote,
+  selectedStrategy, lastTxType, lastTxAmount, isDirectWithdraw,
   openDepositDialog, handleDeposit, handleWithdraw,
-  handleSelectToken, handleUpdateAmount, handleChangeMode,
+  handleSelectToken, handleSelectWithdrawToken, handleUpdateAmount, handleChangeMode,
 } = useDepositFlow({
-  address, deposit, redeem, zapDeposit, reset,
-  getZapQuote, NATIVE_TOKEN, walletTokens, fetchWalletTokens,
+  address, deposit, redeem, zapDeposit, zapWithdraw, reset,
+  getZapQuote, getZapWithdrawQuote, NATIVE_TOKEN, walletTokens, fetchWalletTokens,
   fetchPocketPosition: (p) => profileStore.fetchPocketPosition(p),
 })
 
@@ -485,7 +485,10 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
       :loading-tokens="loadingTokens"
       :loading-position="loadingPositions"
       :fetching-quote="fetchingQuote"
+      :fetching-withdraw-quote="fetchingWithdrawQuote"
       :zap-quote="zapQuote"
+      :withdraw-zap-quote="withdrawZapQuote"
+      :is-direct-withdraw="isDirectWithdraw"
       :native-token="NATIVE_TOKEN"
       :asset-price="selectedPocket ? profileStore.getAssetPrice(selectedPocket.strategy_key) : 0"
       @deposit="handleDeposit"
@@ -494,6 +497,7 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
       @fetch-tokens="fetchWalletTokens"
       @fetch-position="selectedPocket && profileStore.fetchPocketPosition(selectedPocket)"
       @select-token="handleSelectToken"
+      @select-withdraw-token="handleSelectWithdrawToken"
       @update-amount="handleUpdateAmount"
       @change-mode="handleChangeMode"
     />

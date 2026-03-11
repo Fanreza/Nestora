@@ -5,7 +5,7 @@ const open = defineModel<boolean>('open', { required: true })
 
 const {
   sendEmailCode, loginWithEmail,
-  loginWithOAuth, loginWithFarcaster, loginWithProvider, /* loginWithWalletConnect, */ loginWithCoinbaseSmartWallet,
+  loginWithOAuth, loginWithFarcaster, loginWithProvider, loginWithWalletConnect, loginWithCoinbaseSmartWallet,
   isConnecting,
 } = usePrivyAuth()
 
@@ -121,19 +121,18 @@ async function handleDetectedWallet(wallet: DetectedWallet) {
   }
 }
 
-// WalletConnect temporarily disabled
-// async function handleWalletConnect() {
-//   error.value = ''
-//   connectingWallet.value = 'walletconnect'
-//   try {
-//     await loginWithWalletConnect()
-//     open.value = false
-//   } catch (e: any) {
-//     error.value = e.message || 'WalletConnect failed'
-//   } finally {
-//     connectingWallet.value = null
-//   }
-// }
+async function handleWalletConnect() {
+  error.value = ''
+  connectingWallet.value = 'walletconnect'
+  try {
+    await loginWithWalletConnect()
+    open.value = false
+  } catch (e: any) {
+    error.value = e.message || 'WalletConnect failed'
+  } finally {
+    connectingWallet.value = null
+  }
+}
 
 async function handleCoinbaseSmartWallet() {
   error.value = ''
@@ -291,8 +290,7 @@ async function handleCoinbaseSmartWallet() {
           <span v-else class="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded-md">Detected</span>
         </button>
 
-        <!-- WalletConnect (disabled for now) -->
-        <!--
+        <!-- WalletConnect -->
         <button
           class="w-full flex items-center gap-3 p-3 rounded-xl bg-muted/50 border border-border
                  hover:bg-muted hover:border-[#3B99FC]/30 transition-all active:scale-[0.98] group"
@@ -307,25 +305,6 @@ async function handleCoinbaseSmartWallet() {
             <p class="text-[11px] text-muted-foreground">Scan QR with any mobile wallet</p>
           </div>
           <Icon v-if="connectingWallet === 'walletconnect'" name="lucide:loader-2" class="w-4 h-4 animate-spin text-muted-foreground" />
-          <Icon v-else name="lucide:chevron-right" class="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-        </button>
-        -->
-
-        <!-- Coinbase in wallet picker too -->
-        <button
-          class="w-full flex items-center gap-3 p-3 rounded-xl bg-muted/50 border border-border
-                 hover:bg-muted hover:border-blue-500/30 transition-all active:scale-[0.98] group"
-          :disabled="!!connectingWallet"
-          @click="handleCoinbaseSmartWallet"
-        >
-          <div class="w-9 h-9 rounded-lg bg-[#0052FF] flex items-center justify-center">
-            <Icon name="simple-icons:coinbase" class="w-5 h-5 text-white" />
-          </div>
-          <div class="text-left flex-1">
-            <p class="font-medium text-sm">Coinbase</p>
-            <p class="text-[11px] text-muted-foreground">Smart wallet</p>
-          </div>
-          <Icon v-if="connectingWallet === 'coinbase'" name="lucide:loader-2" class="w-4 h-4 animate-spin text-muted-foreground" />
           <Icon v-else name="lucide:chevron-right" class="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
         </button>
 

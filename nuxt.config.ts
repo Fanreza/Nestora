@@ -15,7 +15,48 @@ export default defineNuxtConfig({
     },
   },
 
-  modules: ['@pinia/nuxt', 'shadcn-nuxt', '@nuxt/icon', '@nuxt/fonts'],
+  modules: ['@pinia/nuxt', 'shadcn-nuxt', '@nuxt/icon', '@nuxt/fonts', '@vite-pwa/nuxt'],
+
+  pwa: {
+    registerType: 'autoUpdate',
+    manifest: {
+      name: 'Nestora — Smart Savings on Base',
+      short_name: 'Nestora',
+      description: 'DeFi savings app on Base. Create pockets, set goals, earn yield.',
+      theme_color: '#10B981',
+      background_color: '#0B0E0D',
+      display: 'standalone',
+      orientation: 'portrait',
+      start_url: '/',
+      icons: [
+        { src: '/icon.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+        { src: '/icon.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        { src: '/logo.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      ],
+    },
+    workbox: {
+      navigateFallback: '/',
+      globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
+      runtimeCaching: [
+        {
+          urlPattern: /^https:\/\/api\.yo\.xyz\/.*/i,
+          handler: 'NetworkFirst',
+          options: { cacheName: 'yo-api', expiration: { maxEntries: 50, maxAgeSeconds: 300 } },
+        },
+        {
+          urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+          handler: 'CacheFirst',
+          options: { cacheName: 'google-fonts', expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 } },
+        },
+      ],
+    },
+    client: {
+      installPrompt: true,
+    },
+    devOptions: {
+      enabled: false,
+    },
+  },
 
   shadcn: {
     prefix: '',
@@ -67,6 +108,7 @@ export default defineNuxtConfig({
       link: [
         { rel: 'icon', type: 'image/png', href: '/logo.png' },
         { rel: 'apple-touch-icon', href: '/logo.png' },
+        { rel: 'manifest', href: '/manifest.webmanifest' },
         { rel: 'canonical', href: 'https://nestora.aethereal.top' },
       ],
       script: [
