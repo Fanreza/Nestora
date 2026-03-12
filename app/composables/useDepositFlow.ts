@@ -119,13 +119,16 @@ export function useDepositFlow(deps: DepositFlowDeps) {
     if (!strategy || !deps.address.value || !selectedPocket.value) return
 
     lastTxType.value = 'deposit'
-    lastTxAmount.value = payload.amount
 
     if (payload.isDirect) {
+      lastTxAmount.value = payload.amount
       const parsed = parseUnits(payload.amount, strategy.decimals)
       if (parsed === 0n) return
       await deps.deposit(strategy, parsed)
     } else if (zapQuote.value) {
+      // Record the estimated vault asset amount (e.g. USDC), not the input token amount
+      const amountOutFloat = parseFloat(zapQuote.value.amountOut) / 10 ** strategy.decimals
+      lastTxAmount.value = amountOutFloat > 0 ? amountOutFloat.toString() : payload.amount
       const tokenBal = deps.walletTokens.value.find(
         t => t.token?.toLowerCase() === payload.tokenIn.toLowerCase(),
       )
@@ -140,6 +143,7 @@ export function useDepositFlow(deps: DepositFlowDeps) {
     if (!strategy || !deps.address.value || !selectedPocket.value) return
 
     lastTxType.value = 'redeem'
+    // Always record in vault asset units (the shares amount maps 1:1 to asset for recording)
     lastTxAmount.value = payload.amount
 
     const parsed = parseUnits(payload.amount, strategy.decimals)
