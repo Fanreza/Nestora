@@ -7,7 +7,8 @@
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "tauri": "tauri"
   },
   "dependencies": {
     "@coinbase/wallet-sdk": "^4.3.7",
@@ -18,6 +19,8 @@
     "@privy-io/js-sdk-core": "^0.60.4",
     "@supabase/supabase-js": "^2.98.0",
     "@tanstack/vue-query": "^5.92.9",
+    "@tauri-apps/plugin-deep-link": "^2.4.7",
+    "@tauri-apps/plugin-shell": "^2.3.5",
     "@vueuse/core": "^14.2.1",
     "@wagmi/core": "^2.22.1",
     "@walletconnect/ethereum-provider": "^2.23.7",
@@ -42,6 +45,7 @@
     "@nuxt/fonts": "^0.14.0",
     "@nuxt/icon": "^2.2.1",
     "@tailwindcss/vite": "^4.2.1",
+    "@tauri-apps/cli": "^2.10.1",
     "@vite-pwa/nuxt": "^1.1.1",
     "shadcn-nuxt": "^2.4.3",
     "tailwindcss": "^4.2.1",

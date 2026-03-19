@@ -321,11 +321,29 @@ export function usePrivyAuth() {
   async function loginWithOAuth(provider: 'google' | 'twitter' | 'discord') {
     isConnecting.value = true
     try {
-      const redirectURI = `${window.location.origin}/auth/callback`
-      const result = await privy.auth.oauth.generateURL(provider, redirectURI)
-      localStorage.setItem('privy_oauth_provider', provider)
-      window.location.assign(result.url)
-    } catch {
+      const isTauri = '__TAURI_INTERNALS__' in window
+
+      if (isTauri) {
+        // In Tauri: open system browser for OAuth, callback via deep link
+        const redirectURI = 'https://nestora.aethereal.top/auth/mobile-callback'
+        const result = await privy.auth.oauth.generateURL(provider, redirectURI)
+        // Append provider to URL so mobile-callback can pass it back
+        const url = new URL(result.url)
+        // Store provider for when deep link comes back
+        localStorage.setItem('privy_oauth_provider', provider)
+        // Open in system browser
+        const { open } = await import('@tauri-apps/plugin-shell')
+        await open(result.url)
+        // Don't set isConnecting false — will be resolved when deep link arrives
+      } else {
+        // In browser: normal redirect flow
+        const redirectURI = `${window.location.origin}/auth/callback`
+        const result = await privy.auth.oauth.generateURL(provider, redirectURI)
+        localStorage.setItem('privy_oauth_provider', provider)
+        window.location.assign(result.url)
+      }
+    } catch (e) {
+      console.error('[usePrivy] loginWithOAuth error:', e)
       isConnecting.value = false
     }
   }
