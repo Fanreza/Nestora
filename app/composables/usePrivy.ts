@@ -50,14 +50,17 @@ export function usePrivyAuth() {
 
   // ---- Public client (read-only, no wallet needed) ----
   function getPublicClient(): PublicClient {
-    if (!_publicClient) {
+    const rpcUrl = (useRuntimeConfig().public.baseRpcUrl as string)?.trim() || null
+    const cacheKey = rpcUrl || 'default'
+    if (!_publicClient || (_publicClient as any)._rpcUrl !== cacheKey) {
       _publicClient = createPublicClient({
         chain: base,
-        transport: http(),
+        transport: http(rpcUrl ?? undefined),
         batch: {
           multicall: true,
         },
-      })
+      }) as any
+      ;(_publicClient as any)._rpcUrl = cacheKey
     }
     return _publicClient
   }
@@ -67,6 +70,9 @@ export function usePrivyAuth() {
   // which returns 'gas', but Privy's toWalletApiUnsignedEthTransaction reads 'gasLimit' → gas=0.
   // Fix: intercept send calls, sign via eth_signTransaction (which skips handlePopulateTransaction),
   // and broadcast via public RPC.
+  let _lastNonce = -1
+  let _lastNonceTime = 0
+
   function wrapProvider(provider: EIP1193Provider): EIP1193Provider {
     return {
       ...provider,
@@ -76,10 +82,21 @@ export function usePrivyAuth() {
           const pc = getPublicClient()
           const from = params.from || address.value
 
-          // Get nonce
-          const nonce = params.nonce
-            ? Number(typeof params.nonce === 'string' ? parseInt(params.nonce, 16) : params.nonce)
-            : await pc.getTransactionCount({ address: from, blockTag: 'pending' })
+          // Get nonce — track locally to avoid stale pending nonce after rapid txs
+          let nonce: number
+          if (params.nonce) {
+            nonce = Number(typeof params.nonce === 'string' ? parseInt(params.nonce, 16) : params.nonce)
+          } else {
+            const pendingNonce = await pc.getTransactionCount({ address: from, blockTag: 'pending' })
+            // If we recently sent a tx and pending nonce hasn't caught up, increment
+            if (_lastNonce >= 0 && Date.now() - _lastNonceTime < 15000 && pendingNonce <= _lastNonce) {
+              nonce = _lastNonce + 1
+            } else {
+              nonce = pendingNonce
+            }
+          }
+          _lastNonce = nonce
+          _lastNonceTime = Date.now()
 
           // Parse or estimate gas
           let gasLimit: bigint
@@ -147,6 +164,7 @@ export function usePrivyAuth() {
 
     // External provider first: Farcaster mini app, MetaMask, Coinbase, etc.
     if (_externalProvider) {
+      await ensureBaseChain()
       _walletClient = createWalletClient({
         account: address.value,
         chain: base,
@@ -174,13 +192,48 @@ export function usePrivyAuth() {
         account: address.value,
         chain: base,
         transport: custom(wrapProvider(provider)),
-        dataSuffix: BUILDER_CODE_SUFFIX,
+        // dataSuffix: BUILDER_CODE_SUFFIX, // disabled: causes Enso router reverts with embedded wallet
       })
     } else {
       throw new Error('No wallet provider available')
     }
 
     return _walletClient
+  }
+
+  // ---- Auto-switch to Base chain ----
+  async function ensureBaseChain() {
+    if (!_externalProvider) return // Embedded wallets are always on Base
+
+    try {
+      const currentChainId = await _externalProvider.request({ method: 'eth_chainId' })
+      if (parseInt(currentChainId, 16) === 8453) return // Already on Base
+
+      try {
+        await _externalProvider.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0x2105' }], // 8453 in hex
+        })
+      } catch (switchError: any) {
+        // Chain not added — add it first
+        if (switchError?.code === 4902) {
+          await _externalProvider.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: '0x2105',
+              chainName: 'Base',
+              nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+              rpcUrls: ['https://mainnet.base.org'],
+              blockExplorerUrls: ['https://basescan.org'],
+            }],
+          })
+        } else {
+          throw switchError
+        }
+      }
+    } catch (e) {
+      console.warn('[usePrivy] ensureBaseChain failed:', e)
+    }
   }
 
   // ---- Farcaster mini app ----

@@ -268,6 +268,21 @@ watch(address, (addr) => {
   }
 }, { immediate: true })
 
+// ---- Loading tips ----
+const tips = [
+  'Your funds stay in your wallet — always.',
+  'Yield starts accruing the moment you deposit.',
+  'You can withdraw anytime, no lock-ups.',
+  'Base fees are usually less than $0.01.',
+  'Create multiple pockets for different goals.',
+  'Switch strategies anytime in one tap.',
+  'Deposit any token — we handle the swap.',
+  'Set reminders to keep your savings on track.',
+  'Claim YO rewards from the dashboard.',
+  'Nestora never asks for your seed phrase.',
+]
+const loadingTip = tips[Math.floor(Math.random() * tips.length)]
+
 // ---- Helpers ----
 const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parseUnits('0.0005', 18))
 
@@ -301,14 +316,17 @@ const averageApy = computed(() => {
   <div class="min-h-screen bg-background">
     <!-- Loading -->
     <template v-if="!isReady">
-      <div class="h-dvh flex items-center justify-center overflow-hidden">
-        <Icon name="lucide:loader-2" class="w-6 h-6 animate-spin text-muted-foreground" />
+      <div class="h-dvh flex flex-col items-center justify-center overflow-hidden gap-6">
+        <img src="/logo.png" alt="Nestora" class="w-20 h-20 animate-pulse" />
+        <p class="text-sm text-muted-foreground/70 max-w-xs text-center px-6">
+          {{ loadingTip }}
+        </p>
       </div>
     </template>
 
+    <template v-else>
     <!-- Header -->
     <AppHeader
-      v-else
       :is-connected="isConnected"
       :is-base="isBase"
       :display-name="profileDisplayName"
@@ -576,5 +594,6 @@ const averageApy = computed(() => {
       v-model:open="showFundDialog"
       :address="address"
     />
+    </template>
   </div>
 </template>

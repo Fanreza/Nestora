@@ -84,13 +84,13 @@ export function useVault() {
   async function getYoClient() {
     const walletClient = await getWalletClient()
     const publicClient = getPublicClient()
-    return createYoClient({ chainId: BASE_CHAIN_ID, walletClient, publicClient, partnerId: 9999 })
+    return createYoClient({ chainId: BASE_CHAIN_ID, walletClient, publicClients: { [BASE_CHAIN_ID]: publicClient }, partnerId: 9999 })
   }
 
   // Read-only Yo client (no wallet needed)
   function getReadClient() {
     const publicClient = getPublicClient()
-    return createYoClient({ chainId: BASE_CHAIN_ID, publicClient })
+    return createYoClient({ chainId: BASE_CHAIN_ID, publicClients: { [BASE_CHAIN_ID]: publicClient } })
   }
 
   // ---- Gas estimation ----
@@ -117,27 +117,33 @@ export function useVault() {
         return
       }
 
-      // Check allowance and approve if needed (approve to Gateway, not vault)
+      // Check on-chain allowance and approve max if needed
       txState.value = 'approving'
-      const hasAllowance = await client.hasEnoughAllowance(
-        strategy.assetAddress,
-        address.value,
-        YO_GATEWAY_ADDRESS,
-        amount,
-      )
+      const publicClient = getPublicClient()
+      const allowance = await publicClient.readContract({
+        address: strategy.assetAddress as `0x${string}`,
+        abi: [{ name: 'allowance', type: 'function', inputs: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
+        functionName: 'allowance',
+        args: [address.value, YO_GATEWAY_ADDRESS as `0x${string}`],
+      }) as bigint
 
-      if (!hasAllowance) {
-        const approveTx = client.prepareApprove({
-          token: strategy.assetAddress,
-          spender: YO_GATEWAY_ADDRESS as `0x${string}`,
-          amount,
+      if (allowance < amount) {
+        const MAX_UINT256 = 2n ** 256n - 1n
+        const approveData = encodeFunctionData({
+          abi: [{ name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }] }],
+          functionName: 'approve',
+          args: [YO_GATEWAY_ADDRESS as `0x${string}`, MAX_UINT256],
         })
         const approveHash = await sendTx({
-          to: approveTx.to,
-          data: approveTx.data,
-          value: approveTx.value,
+          to: strategy.assetAddress as `0x${string}`,
+          data: approveData,
         })
-        await client.waitForTransaction(approveHash)
+        const approveReceipt = await publicClient.waitForTransactionReceipt({ hash: approveHash })
+        if (approveReceipt.status !== 'success') {
+          txError.value = 'Approval failed'
+          txState.value = 'failed'
+          return
+        }
       }
 
       txState.value = 'awaiting_signature'
@@ -156,10 +162,9 @@ export function useVault() {
       txHash.value = hash
       txState.value = 'pending'
 
-      const publicClient = getPublicClient()
-      const receipt = await publicClient.waitForTransactionReceipt({ hash })
-      txState.value = receipt.status === 'success' ? 'confirmed' : 'failed'
-      if (receipt.status !== 'success') txError.value = 'Transaction reverted'
+      const depositReceipt = await publicClient.waitForTransactionReceipt({ hash })
+      txState.value = depositReceipt.status === 'success' ? 'confirmed' : 'failed'
+      if (depositReceipt.status !== 'success') txError.value = 'Transaction reverted'
     } catch (e: any) {
       console.error('[useVault] deposit error:', e)
       txState.value = 'failed'
@@ -318,7 +323,7 @@ export function useVault() {
   // ---- Zap Deposit (via Enso) ----
   async function zapDeposit(strategy: Strategy, tokenIn: `0x${string}`, amount: string) {
     if (!address.value) return
-    const { getZapQuote, getApprovalTx, NATIVE_TOKEN } = useEnso()
+    const { getZapQuote, NATIVE_TOKEN } = useEnso()
 
     try {
       txState.value = 'preparing'
@@ -335,24 +340,43 @@ export function useVault() {
       // Approve token spend if not native ETH
       if (tokenIn.toLowerCase() !== NATIVE_TOKEN.toLowerCase()) {
         txState.value = 'approving'
-        const approval = await getApprovalTx(tokenIn, amount, address.value)
-        if (approval?.tx) {
-          const approveHash = await sendTx({
-            to: approval.tx.to as `0x${string}`,
-            data: approval.tx.data as `0x${string}`,
-            value: BigInt(approval.tx.value || '0'),
-          })
-          const publicClient = getPublicClient()
-          await publicClient.waitForTransactionReceipt({ hash: approveHash })
+        const spender = quote.tx.to as `0x${string}`
+        const MAX_UINT256 = 2n ** 256n - 1n
+        const erc20ApproveData = encodeFunctionData({
+          abi: [{ name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }] }],
+          functionName: 'approve',
+          args: [spender, MAX_UINT256],
+        })
+        const approveHash = await sendTx({
+          to: tokenIn as `0x${string}`,
+          data: erc20ApproveData,
+        })
+        const publicClient = getPublicClient()
+        const approveReceipt = await publicClient.waitForTransactionReceipt({ hash: approveHash })
+        if (approveReceipt.status !== 'success') {
+          txError.value = 'Approval failed'
+          txState.value = 'failed'
+          return
         }
       }
 
-      // Execute the zap transaction
       txState.value = 'awaiting_signature'
+      const freshQuote = await $fetch<any>('/api/enso/route', {
+        method: 'POST',
+        body: {
+          fromAddress: address.value,
+          amountIn: amount,
+          tokenIn,
+          tokenOut: strategy.vaultAddress,
+          slippage: '300',
+        },
+      })
+
+      const execQuote = freshQuote?.tx ? freshQuote : quote
       const hash = await sendTx({
-        to: quote.tx.to as `0x${string}`,
-        data: quote.tx.data as `0x${string}`,
-        value: BigInt(quote.tx.value || '0'),
+        to: execQuote.tx.to as `0x${string}`,
+        data: execQuote.tx.data as `0x${string}`,
+        value: BigInt(execQuote.tx.value || '0'),
       })
 
       txHash.value = hash
@@ -372,7 +396,6 @@ export function useVault() {
   // ---- Zap Withdraw (redeem vault → any token via Enso) ----
   async function zapWithdraw(strategy: Strategy, shares: bigint, tokenOut: `0x${string}`) {
     if (!address.value || shares === 0n) return
-    const { getApprovalTx } = useEnso()
 
     try {
       txState.value = 'preparing'
@@ -397,35 +420,52 @@ export function useVault() {
         return
       }
 
-      // Approve vault shares to Enso router
+      // Approve vault shares to Enso router (max approval)
       txState.value = 'approving'
-      const approval = await getApprovalTx(
-        strategy.vaultAddress as `0x${string}`,
-        shares.toString(),
-        address.value,
-      )
-      if (approval?.tx) {
-        const approveHash = await sendTx({
-          to: approval.tx.to as `0x${string}`,
-          data: approval.tx.data as `0x${string}`,
-          value: BigInt(approval.tx.value || '0'),
-        })
-        const publicClient = getPublicClient()
-        await publicClient.waitForTransactionReceipt({ hash: approveHash })
+      const spender = quote.tx.to as `0x${string}`
+      const MAX_UINT256 = 2n ** 256n - 1n
+      const erc20ApproveData = encodeFunctionData({
+        abi: [{ name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }] }],
+        functionName: 'approve',
+        args: [spender, MAX_UINT256],
+      })
+      console.log('[vault] zapWithdraw: approving vault shares to', spender)
+      const approveHash = await sendTx({
+        to: strategy.vaultAddress as `0x${string}`,
+        data: erc20ApproveData,
+      })
+      console.log('[vault] zapWithdraw: approval tx hash', approveHash)
+      const publicClient = getPublicClient()
+      const approveReceipt = await publicClient.waitForTransactionReceipt({ hash: approveHash })
+      console.log('[vault] zapWithdraw: approval status', approveReceipt.status)
+      if (approveReceipt.status !== 'success') {
+        txError.value = 'Approval failed'
+        txState.value = 'failed'
+        return
       }
 
-      // Execute the zap withdraw
       txState.value = 'awaiting_signature'
+      const freshQuote = await $fetch<any>('/api/enso/route', {
+        method: 'POST',
+        body: {
+          fromAddress: address.value,
+          amountIn: shares.toString(),
+          tokenIn: strategy.vaultAddress,
+          tokenOut,
+          slippage: '300',
+        },
+      })
+
+      const execQuote = freshQuote?.tx ? freshQuote : quote
       const hash = await sendTx({
-        to: quote.tx.to as `0x${string}`,
-        data: quote.tx.data as `0x${string}`,
-        value: BigInt(quote.tx.value || '0'),
+        to: execQuote.tx.to as `0x${string}`,
+        data: execQuote.tx.data as `0x${string}`,
+        value: BigInt(execQuote.tx.value || '0'),
       })
 
       txHash.value = hash
       txState.value = 'pending'
 
-      const publicClient = getPublicClient()
       const receipt = await publicClient.waitForTransactionReceipt({ hash })
       txState.value = receipt.status === 'success' ? 'confirmed' : 'failed'
       if (receipt.status !== 'success') txError.value = 'Transaction reverted'
@@ -521,9 +561,7 @@ export function useVault() {
       txError.value = ''
       txHash.value = null
 
-      const { getApprovalTx } = useEnso()
-
-      // Get Enso route: old vault token → new vault token (single tx)
+      // Get Enso route: old vault token → new vault token
       const quote = await $fetch<any>('/api/enso/route', {
         method: 'POST',
         body: {
@@ -541,35 +579,58 @@ export function useVault() {
         return
       }
 
-      // Approve old vault shares to Enso router
+      // Approve old vault shares to Enso router (max approval)
       txState.value = 'approving'
-      const approval = await getApprovalTx(
-        fromStrategy.vaultAddress as `0x${string}`,
-        shares.toString(),
-        address.value,
-      )
-      if (approval?.tx) {
-        const approveHash = await sendTx({
-          to: approval.tx.to as `0x${string}`,
-          data: approval.tx.data as `0x${string}`,
-          value: BigInt(approval.tx.value || '0'),
+      const spender = quote.tx.to as `0x${string}`
+      const publicClient = getPublicClient()
+      const allowance = await publicClient.readContract({
+        address: fromStrategy.vaultAddress as `0x${string}`,
+        abi: [{ name: 'allowance', type: 'function', inputs: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
+        functionName: 'allowance',
+        args: [address.value, spender],
+      }) as bigint
+
+      if (allowance < shares) {
+        const MAX_UINT256 = 2n ** 256n - 1n
+        const approveData = encodeFunctionData({
+          abi: [{ name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }] }],
+          functionName: 'approve',
+          args: [spender, MAX_UINT256],
         })
-        const publicClient = getPublicClient()
-        await publicClient.waitForTransactionReceipt({ hash: approveHash })
+        const approveHash = await sendTx({
+          to: fromStrategy.vaultAddress as `0x${string}`,
+          data: approveData,
+        })
+        const approveReceipt = await publicClient.waitForTransactionReceipt({ hash: approveHash })
+        if (approveReceipt.status !== 'success') {
+          txError.value = 'Approval failed'
+          txState.value = 'failed'
+          return
+        }
       }
 
-      // Execute the swap
       txState.value = 'awaiting_signature'
+      const freshQuote = await $fetch<any>('/api/enso/route', {
+        method: 'POST',
+        body: {
+          fromAddress: address.value,
+          amountIn: shares.toString(),
+          tokenIn: fromStrategy.vaultAddress,
+          tokenOut: toStrategy.vaultAddress,
+          slippage: '300',
+        },
+      })
+
+      const execQuote = freshQuote?.tx ? freshQuote : quote
       const hash = await sendTx({
-        to: quote.tx.to as `0x${string}`,
-        data: quote.tx.data as `0x${string}`,
-        value: BigInt(quote.tx.value || '0'),
+        to: execQuote.tx.to as `0x${string}`,
+        data: execQuote.tx.data as `0x${string}`,
+        value: BigInt(execQuote.tx.value || '0'),
       })
 
       txHash.value = hash
       txState.value = 'pending'
 
-      const publicClient = getPublicClient()
       const receipt = await publicClient.waitForTransactionReceipt({ hash })
       txState.value = receipt.status === 'success' ? 'confirmed' : 'failed'
       if (receipt.status !== 'success') txError.value = 'Transaction reverted'
