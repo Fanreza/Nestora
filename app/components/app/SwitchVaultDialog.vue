@@ -78,7 +78,9 @@ function handleClose() {
   emit('reset')
 }
 
+const { showSwitchVaultTour } = useTour()
 watch(open, (v) => {
+  if (v) showSwitchVaultTour()
   if (!v) {
     selectedStrategy.value = null
     emit('reset')
@@ -97,7 +99,7 @@ watch(open, (v) => {
       </DialogHeader>
 
       <!-- Current position -->
-      <div v-if="currentStrategy" class="rounded-lg border p-3 mb-1">
+      <div v-if="currentStrategy" class="rounded-lg border p-3 mb-1" data-tour="switch-current">
         <p class="text-xs text-muted-foreground mb-1">Current vault</p>
         <div class="flex items-center gap-2">
           <Icon :name="currentStrategy.icon" class="w-4 h-4" :class="RISK_COLORS[currentStrategy.key]?.split(' ')[1]" />
@@ -134,7 +136,7 @@ watch(open, (v) => {
       <!-- Strategy picker -->
       <template v-else>
         <p class="text-xs text-muted-foreground mt-2 mb-2">Switch to</p>
-        <div class="space-y-2">
+        <div class="space-y-2" data-tour="switch-options">
           <button
             v-for="s in otherStrategies"
             :key="s.key"

@@ -30,6 +30,11 @@ useHead({
         <!-- Separator -->
         <div class="w-full h-px bg-white/6" />
 
+        <LandingCalculator />
+
+        <!-- Separator -->
+        <div class="w-full h-px bg-white/6" />
+
         <LandingHowItWorks />
 
         <!-- Separator -->

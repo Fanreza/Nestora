@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { parseUnits } from 'viem'
+import { parseUnits, formatUnits } from 'viem'
 import { STRATEGIES, type StrategyKey } from '~/config/strategies'
 import type { DbPocket } from '~/types/database'
 import { usePrivyAuth } from '~/composables/usePrivy'
@@ -270,6 +270,60 @@ watch(address, (addr) => {
 
 // ---- Helpers ----
 const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parseUnits('0.0005', 18))
+
+// ---- Yield comparison data ----
+const totalPortfolioUsd = computed(() => {
+  let total = 0
+  for (const pocket of pockets.value) {
+    const pos = pocketPositions.value[pocket.id]
+    if (!pos || pos.value === 0n) continue
+    const strategy = STRATEGIES[pocket.strategy_key as StrategyKey]
+    if (!strategy) continue
+    const val = parseFloat(formatUnits(pos.value, strategy.decimals))
+    total += val * profileStore.getAssetPrice(pocket.strategy_key)
+  }
+  return total
+})
+
+const averageApy = computed(() => {
+  const apys: number[] = []
+  for (const pocket of pockets.value) {
+    const apy = profileStore.getStrategyApy(pocket.strategy_key)
+    if (apy) apys.push(parseFloat(apy))
+  }
+  if (apys.length === 0) return 0
+  return apys.reduce((a, b) => a + b, 0) / apys.length
+})
+
+// ---- Weekly summary data ----
+const totalEarningsUsd = computed(() => {
+  let total = 0
+  for (const pocket of pockets.value) {
+    const profit = pocketProfits.value[pocket.id]
+    if (!profit) continue
+    const val = parseFloat(profit)
+    if (val > 0) {
+      const price = profileStore.getAssetPrice(pocket.strategy_key)
+      total += val * price
+    }
+  }
+  return total
+})
+
+const topPocketName = computed(() => {
+  let maxProfit = 0
+  let name: string | null = null
+  for (const pocket of pockets.value) {
+    const profit = pocketProfits.value[pocket.id]
+    if (!profit) continue
+    const val = parseFloat(profit)
+    if (val > maxProfit) {
+      maxProfit = val
+      name = pocket.name
+    }
+  }
+  return name
+})
 </script>
 
 <template>
@@ -363,7 +417,7 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
       </div>
 
       <!-- Portfolio summary -->
-      <div class="mb-8">
+      <div class="mb-8" data-tour="total-balance">
         <p class="text-sm text-muted-foreground mb-1">Total balance</p>
         <Skeleton v-if="loadingPositions" class="h-10 w-40 mb-1" />
         <h1 v-else class="text-4xl font-bold tracking-tight">{{ totalPortfolioFormatted }}</h1>
@@ -375,6 +429,7 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
             variant="outline"
             size="sm"
             class="h-7 text-xs"
+            data-tour="fund-wallet"
             @click="showFundDialog = true"
           >
             <Icon name="lucide:download" class="w-3.5 h-3.5 mr-1" />
@@ -383,10 +438,19 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
         </div>
       </div>
 
+      <!-- Yield comparison -->
+      <AppYieldComparisonCard
+        v-if="!loadingPositions && pockets.length > 0"
+        :total-value-usd="totalPortfolioUsd"
+        :average-apy="averageApy"
+        class="mb-6"
+      />
+
       <div class="flex items-center justify-between mb-5">
         <h2 class="text-lg font-semibold">Pockets</h2>
         <Button
           class="bg-primary text-primary-foreground hover:bg-primary/90"
+          data-tour="create-pocket"
           @click="showCreateDialog = true"
         >
           <Icon name="lucide:plus" class="w-4 h-4 mr-1.5" />
@@ -464,6 +528,9 @@ const lowGas = computed(() => !loadingBalances.value && ethBalance.value < parse
         </div>
       </div>
     </main>
+
+    <!-- Onboarding story (first-time users) -->
+    <AppOnboardingStory v-if="isConnected" />
 
     <!-- Dialogs -->
     <AppConnectModal v-model:open="showConnectModal" />

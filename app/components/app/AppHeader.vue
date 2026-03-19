@@ -39,7 +39,22 @@ defineEmits<{
         >
           Network issue
         </Badge>
-        <Button variant="outline" size="sm" @click="$emit('goProfile')">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <NuxtLink to="/learn" data-tour="learn-link">
+                <Button variant="ghost" size="sm" class="text-muted-foreground hover:text-foreground">
+                  <Icon name="lucide:book-open" class="w-4 h-4 sm:mr-1.5" />
+                  <span class="hidden sm:inline">Learn</span>
+                </Button>
+              </NuxtLink>
+            </TooltipTrigger>
+            <TooltipContent class="sm:hidden">
+              <p>Learn how it works</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <Button variant="outline" size="sm" data-tour="profile" @click="$emit('goProfile')">
           <Icon name="lucide:user-circle" class="w-4 h-4 mr-1.5" />
           {{ displayName }}
         </Button>

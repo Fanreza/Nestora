@@ -100,6 +100,26 @@ const timelineDisplay = computed(() => {
   return { date: dateStr, remaining: `${diffDays}d left` }
 })
 
+// ---- Goal milestones ----
+const MILESTONES = [25, 50, 75, 100]
+const currentMilestone = computed(() => {
+  const p = progressRaw.value
+  if (p >= 100) return 100
+  if (p >= 75) return 75
+  if (p >= 50) return 50
+  if (p >= 25) return 25
+  return 0
+})
+
+const milestoneLabel = computed(() => {
+  const m = currentMilestone.value
+  if (m === 100) return 'Goal reached!'
+  if (m === 75) return 'Almost there!'
+  if (m === 50) return 'Halfway!'
+  if (m === 25) return 'Great start!'
+  return null
+})
+
 const reminderBanner = computed(() => {
   if (!props.pocket.recurring_next_due) return null
   const today = new Date()
@@ -196,14 +216,19 @@ function displayUsd(value: number): string {
         </span>
       </div>
 
-      <!-- Progress bar -->
+      <!-- Progress bar with milestones -->
       <div v-if="pocket.target_amount" class="mb-4">
         <div class="flex items-center justify-between mb-1.5">
-          <span class="text-xs text-muted-foreground">Progress</span>
+          <span class="text-xs text-muted-foreground">
+            <template v-if="milestoneLabel && !loading">
+              <span class="text-primary font-medium">{{ milestoneLabel }}</span>
+            </template>
+            <template v-else>Progress</template>
+          </span>
           <Skeleton v-if="loading" class="h-3.5 w-8" />
           <span v-else class="text-xs font-medium">{{ progress }}%</span>
         </div>
-        <div class="h-2.5 rounded-full bg-muted overflow-hidden">
+        <div class="relative h-2.5 rounded-full bg-muted overflow-hidden">
           <div
             v-if="!loading"
             class="h-full rounded-full transition-all duration-500"
@@ -213,6 +238,16 @@ function displayUsd(value: number): string {
               'bg-violet-500': pocket.strategy_key === 'aggressive',
             }"
             :style="{ width: `${progressRaw}%` }"
+          />
+        </div>
+        <!-- Milestone dots -->
+        <div v-if="!loading" class="relative h-0">
+          <div
+            v-for="m in MILESTONES"
+            :key="m"
+            class="absolute -top-2 w-1.5 h-1.5 rounded-full -translate-x-1/2 transition-colors duration-300"
+            :class="progressRaw >= m ? 'bg-primary' : 'bg-muted-foreground/30'"
+            :style="{ left: `${m}%` }"
           />
         </div>
       </div>
@@ -285,33 +320,56 @@ function displayUsd(value: number): string {
           <Icon name="lucide:arrow-up-from-line" class="w-3.5 h-3.5 mr-1" />
           Cash Out
         </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          class="h-8 w-8 p-0"
-          :class="pocket.recurring_day != null ? 'text-primary hover:text-primary/80' : 'text-muted-foreground hover:text-primary'"
-          title="Deposit reminder"
-          @click.stop="$emit('schedule')"
-        >
-          <Icon name="lucide:bell" class="w-3.5 h-3.5" />
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          class="h-8 w-8 p-0 text-muted-foreground hover:text-primary"
-          title="Switch vault"
-          @click.stop="$emit('switch')"
-        >
-          <Icon name="lucide:repeat-2" class="w-3.5 h-3.5" />
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          class="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-          @click.stop="$emit('delete')"
-        >
-          <Icon name="lucide:trash-2" class="w-3.5 h-3.5" />
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Button
+                size="sm"
+                variant="ghost"
+                class="h-8 w-8 p-0"
+                :class="pocket.recurring_day != null ? 'text-primary hover:text-primary/80' : 'text-muted-foreground hover:text-primary'"
+                @click.stop="$emit('schedule')"
+              >
+                <Icon name="lucide:bell" class="w-3.5 h-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>Set deposit reminder</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Button
+                size="sm"
+                variant="ghost"
+                class="h-8 w-8 p-0 text-muted-foreground hover:text-primary"
+                @click.stop="$emit('switch')"
+              >
+                <Icon name="lucide:repeat-2" class="w-3.5 h-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>Switch strategy</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Button
+                size="sm"
+                variant="ghost"
+                class="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                @click.stop="$emit('delete')"
+              >
+                <Icon name="lucide:trash-2" class="w-3.5 h-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>Delete pocket</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     </CardContent>
   </Card>

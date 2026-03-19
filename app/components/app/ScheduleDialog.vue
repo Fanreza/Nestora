@@ -101,7 +101,9 @@ function toggleMode() {
   inputMode.value = inputMode.value === 'asset' ? 'usd' : 'asset'
 }
 
+const { showReminderTour } = useTour()
 watch(open, (v) => {
+  if (v) showReminderTour()
   if (v && props.pocket) {
     inputMode.value = 'asset'
     if (props.pocket.recurring_day != null) {
@@ -138,7 +140,7 @@ function handleSave() {
 
       <div class="space-y-4 py-2">
         <!-- Amount -->
-        <div>
+        <div data-tour="reminder-amount">
           <div class="flex items-center justify-between mb-1.5">
             <label class="text-sm font-medium">Amount per deposit</label>
             <button
@@ -178,7 +180,7 @@ function handleSave() {
         </div>
 
         <!-- Day picker -->
-        <div>
+        <div data-tour="reminder-day">
           <label class="text-sm font-medium mb-1.5 block">Day of month</label>
           <div class="grid grid-cols-7 gap-1.5">
             <button

@@ -505,6 +505,10 @@ watch(pocket, () => {
 watch([isConnected, isReady], ([connected, ready]) => {
   if (ready && !connected) navigateTo('/app')
 }, { immediate: true })
+
+// Contextual tour
+const { showPocketTour } = useTour()
+onMounted(() => showPocketTour())
 </script>
 
 <template>
@@ -517,11 +521,11 @@ watch([isConnected, isReady], ([connected, ready]) => {
         </Button>
         <h1 class="text-sm font-semibold truncate">{{ pocket?.name || 'Pocket' }}</h1>
         <div class="ml-auto flex items-center gap-1">
-          <Button variant="ghost" size="sm" class="h-8" @click="showShareCard = true">
+          <Button variant="ghost" size="sm" class="h-8" data-tour="pocket-share" @click="showShareCard = true">
             <Icon name="lucide:share-2" class="w-4 h-4 mr-1" />
             Share
           </Button>
-          <Button variant="ghost" size="sm" class="h-8" @click="showEditDialog = true">
+          <Button variant="ghost" size="sm" class="h-8" data-tour="pocket-edit" @click="showEditDialog = true">
             <Icon name="lucide:pencil" class="w-4 h-4 mr-1" />
             Edit
           </Button>
@@ -551,7 +555,7 @@ watch([isConnected, isReady], ([connected, ready]) => {
       </div>
 
       <!-- Stats row -->
-      <div class="grid grid-cols-3 gap-3 lg:gap-4 mb-6">
+      <div class="grid grid-cols-3 gap-3 lg:gap-4 mb-6" data-tour="pocket-stats">
         <Card>
           <CardContent class="p-4 lg:p-5 text-center">
             <p class="text-xs text-muted-foreground mb-1">APY</p>
@@ -592,7 +596,7 @@ watch([isConnected, isReady], ([connected, ready]) => {
           <!-- Confidence Indicators -->
           <Card class="mb-6 order-4 lg:order-1">
             <CardContent class="p-5">
-              <h3 class="text-sm font-semibold mb-3">Vault Confidence</h3>
+              <h3 class="text-sm font-semibold mb-3" data-tour="pocket-confidence">Vault Confidence</h3>
               <div class="grid grid-cols-2 gap-3">
                 <div class="flex items-center gap-2.5 p-3 rounded-xl bg-muted/50">
                   <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
@@ -710,7 +714,7 @@ watch([isConnected, isReady], ([connected, ready]) => {
           </Card>
 
           <!-- Earnings Breakdown -->
-          <Card v-if="!loadingPositions && !loadingHistory && assetValue > 0" class="mb-6 order-2 lg:order-2">
+          <Card v-if="!loadingPositions && !loadingHistory && assetValue > 0" class="mb-6 order-2 lg:order-2" data-tour="pocket-earnings">
             <CardContent class="p-5">
               <h3 class="text-sm font-semibold mb-3">Earnings Breakdown</h3>
               <div class="space-y-3">
@@ -882,7 +886,7 @@ watch([isConnected, isReady], ([connected, ready]) => {
         <!-- Right column: Goal + History -->
         <div class="contents lg:block lg:col-span-2">
           <!-- Goal: Circular Progress Ring -->
-          <Card v-if="pocket.target_amount || pocket.timeline" class="mb-6 order-1 lg:order-none">
+          <Card v-if="pocket.target_amount || pocket.timeline" class="mb-6 order-1 lg:order-0" data-tour="pocket-goal">
             <CardContent class="p-5">
               <div class="flex items-center justify-between mb-3">
                 <div>
@@ -1007,10 +1011,10 @@ watch([isConnected, isReady], ([connected, ready]) => {
           </Card>
 
           <!-- Transaction history -->
-          <div class="mb-6 order-9 lg:order-none">
+          <div class="mb-6 order-9 lg:order-none" data-tour="pocket-history">
             <div class="flex items-center justify-between mb-3">
               <h3 class="text-sm font-semibold">Transaction History</h3>
-              <div v-if="history.length > 0" class="flex items-center gap-1">
+              <div v-if="history.length > 0" class="flex items-center gap-1" data-tour="pocket-export">
                 <Button variant="ghost" size="sm" class="h-7 text-xs gap-1 no-print" @click="exportTaxCSV">
                   <Icon name="lucide:file-spreadsheet" class="w-3 h-3" />
                   Tax
