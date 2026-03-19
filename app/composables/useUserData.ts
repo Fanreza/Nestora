@@ -111,6 +111,45 @@ export function useUserData() {
     }
   }
 
+  // ---- Referral ----
+
+  async function getReferralCode(address: string, customCode?: string): Promise<string | null> {
+    try {
+      const res = await $fetch<{ code: string }>('/api/referral/generate', {
+        method: 'POST',
+        body: { address, code: customCode },
+      })
+      return res?.code || null
+    } catch (e: any) {
+      console.error('[useUserData] getReferralCode error:', e.data?.message || e.message)
+      return null
+    }
+  }
+
+  async function getReferralStats(address: string) {
+    try {
+      return await $fetch<{
+        code: string | null
+        count: number
+        referred_by: string | null
+        referrals: { address: string; name: string | null; joined: string }[]
+      }>('/api/referral/stats', { params: { address } })
+    } catch (e: any) {
+      console.error('[useUserData] getReferralStats error:', e.message)
+      return null
+    }
+  }
+
+  async function joinWithReferral(address: string, code: string): Promise<boolean> {
+    try {
+      await $fetch('/api/referral/join', { method: 'POST', body: { address, code } })
+      return true
+    } catch (e: any) {
+      console.error('[useUserData] joinWithReferral error:', e.message)
+      return false
+    }
+  }
+
   return {
     ensureUser,
     getUser,
@@ -121,5 +160,8 @@ export function useUserData() {
     deletePocket,
     recordTransaction,
     getTransactions,
+    getReferralCode,
+    getReferralStats,
+    joinWithReferral,
   }
 }

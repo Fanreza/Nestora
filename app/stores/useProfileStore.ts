@@ -77,6 +77,14 @@ export const useProfileStore = defineStore('profile', () => {
         currentUser.value = user
         customName.value = user.display_name || ''
         pockets.value = await fetchDbPockets(user.id)
+
+        // Apply pending referral code (from ?ref=CODE in URL)
+        const pendingRef = localStorage.getItem('nestora_referral_code')
+        if (pendingRef && !user.referred_by) {
+          const { joinWithReferral } = useUserData()
+          const ok = await joinWithReferral(address, pendingRef)
+          if (ok) localStorage.removeItem('nestora_referral_code')
+        }
       }
     } finally {
       loading.value = false

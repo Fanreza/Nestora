@@ -2,6 +2,9 @@ export interface DbUser {
   id: string
   address: string
   display_name: string | null
+  referral_code: string | null
+  referred_by: string | null
+  referral_count: number
   created_at: string
   updated_at: string
 }

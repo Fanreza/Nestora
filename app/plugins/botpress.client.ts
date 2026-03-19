@@ -3,10 +3,9 @@ export default defineNuxtPlugin(() => {
   inject.src = 'https://cdn.botpress.cloud/webchat/v3.6/inject.js'
   inject.async = true
 
-  // Load config script only after inject.js is ready
   inject.onload = () => {
     const config = document.createElement('script')
-    config.src = 'https://files.bpcontent.cloud/2026/03/15/09/20260315092216-AOB1XALR.js'
+    config.src = 'https://files.bpcontent.cloud/2026/03/15/09/20260315092216-AOB1XALR.js?v=' + Date.now()
     document.body.appendChild(config)
   }
 
