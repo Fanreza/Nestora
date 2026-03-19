@@ -3,31 +3,6 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineNuxtConfig({
   ssr: false,
 
-  devServer: {
-    host: process.env.TAURI_DEV_HOST || 'localhost',
-  },
-
-  vite: {
-    // Fix Tauri Android dev mode
-    clearScreen: false,
-    server: {
-      strictPort: true,
-      ...(process.env.TAURI_DEV_HOST
-        ? {
-            host: process.env.TAURI_DEV_HOST,
-            hmr: {
-              protocol: 'ws',
-              host: process.env.TAURI_DEV_HOST,
-              port: 3000,
-            },
-            watch: {
-              ignored: ['**/src-tauri/**'],
-            },
-          }
-        : {}),
-    },
-  },
-
   runtimeConfig: {
     ensoApiKey: '',
     supabaseUrl: '',
@@ -109,7 +84,7 @@ export default defineNuxtConfig({
       title: 'Nestora',
       meta: [
         { charset: 'utf-8' },
-        { name: 'viewport', content: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover' },
+        { name: 'viewport', content: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no' },
         { name: 'description', content: 'DeFi savings app on Base. Create pockets, set goals, earn yield. No DeFi knowledge needed.' },
         // Open Graph
         { property: 'og:type', content: 'website' },
@@ -162,4 +137,5 @@ export default defineNuxtConfig({
   },
 
   compatibilityDate: '2025-01-01',
+
 })

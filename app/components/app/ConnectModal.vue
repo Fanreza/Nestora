@@ -92,6 +92,7 @@ async function handleOAuth(provider: 'google' | 'twitter' | 'discord') {
   error.value = ''
   try {
     await loginWithOAuth(provider)
+    open.value = false
   } catch (e: any) {
     error.value = e.message || 'OAuth failed'
   }

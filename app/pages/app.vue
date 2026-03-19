@@ -295,43 +295,16 @@ const averageApy = computed(() => {
   return apys.reduce((a, b) => a + b, 0) / apys.length
 })
 
-// ---- Weekly summary data ----
-const totalEarningsUsd = computed(() => {
-  let total = 0
-  for (const pocket of pockets.value) {
-    const profit = pocketProfits.value[pocket.id]
-    if (!profit) continue
-    const val = parseFloat(profit)
-    if (val > 0) {
-      const price = profileStore.getAssetPrice(pocket.strategy_key)
-      total += val * price
-    }
-  }
-  return total
-})
-
-const topPocketName = computed(() => {
-  let maxProfit = 0
-  let name: string | null = null
-  for (const pocket of pockets.value) {
-    const profit = pocketProfits.value[pocket.id]
-    if (!profit) continue
-    const val = parseFloat(profit)
-    if (val > maxProfit) {
-      maxProfit = val
-      name = pocket.name
-    }
-  }
-  return name
-})
 </script>
 
 <template>
   <div class="min-h-screen bg-background">
     <!-- Loading -->
-    <div v-if="!isReady" class="min-h-screen flex items-center justify-center">
-      <Icon name="lucide:loader-2" class="w-6 h-6 animate-spin text-muted-foreground" />
-    </div>
+    <template v-if="!isReady">
+      <div class="h-dvh flex items-center justify-center overflow-hidden">
+        <Icon name="lucide:loader-2" class="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    </template>
 
     <!-- Header -->
     <AppHeader

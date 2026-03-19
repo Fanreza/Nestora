@@ -489,6 +489,17 @@ async function downloadShareCard() {
   }
 }
 
+async function nativeShare() {
+  const name = pocket.value?.name ?? 'My pocket'
+  const text = `Check out my savings pocket "${name}" on Nestora! Earning yield automatically on Base.`
+  const url = 'https://nestora.aethereal.top'
+  if (navigator.share) {
+    await navigator.share({ text, url })
+  } else {
+    await navigator.clipboard.writeText(`${text}\n${url}`)
+  }
+}
+
 // ---- Edit dialog ----
 const showEditDialog = ref(false)
 
@@ -1149,10 +1160,14 @@ onMounted(() => showPocketTour())
           <div class="flex gap-3">
             <Button @click="downloadShareCard" :disabled="generatingImage">
               <Icon name="lucide:download" class="w-4 h-4 mr-2" />
-              {{ generatingImage ? 'Generating...' : 'Download PNG' }}
+              {{ generatingImage ? 'Generating...' : 'Save' }}
+            </Button>
+            <Button variant="outline" @click="nativeShare">
+              <Icon name="lucide:share-2" class="w-4 h-4 mr-2" />
+              Share
             </Button>
             <DialogClose as-child>
-              <Button variant="outline">Close</Button>
+              <Button variant="ghost">Close</Button>
             </DialogClose>
           </div>
         </div>
